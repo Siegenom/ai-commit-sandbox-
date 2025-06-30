@@ -11,6 +11,7 @@
 # コンソールの入出力エンコーディングをUTF-8に設定し、文字化けを防ぐ
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 # --- Configuration ---
 # スクリプトの場所を基準にパスを自動設定
 $PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
@@ -19,6 +20,7 @@ $LogDir = Join-Path -Path $ProjectRoot -ChildPath "docs\devlog"
 $TemplateFile = Join-Path -Path $LogDir -ChildPath "_template.md"
 $Today = (Get-Date).ToString("yyyy-MM-dd")
 $LogFile = Join-Path -Path $LogDir -ChildPath "$($Today).md"
+
 # trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
 $EnableAutoStaging = $true
 
@@ -41,6 +43,7 @@ if ($EnableAutoStaging) {
         }
     }
 }
+
 # 1. Gitからコンテキストを収集
 Write-Host "🔍 Gitから情報を収集中..."
 $gitDiff = (git diff --staged | Out-String).Trim()
@@ -52,12 +55,14 @@ if ([string]::IsNullOrEmpty($gitDiff)) {
 
 $changedFiles = (git diff --staged --name-only | ForEach-Object { "  - $_" }) -join [System.Environment]::NewLine
 $currentBranch = (git rev-parse --abbrev-ref HEAD | Out-String).Trim()
+
 # 2. テンプレートを読み込み、AIへのプロンプトを生成
 if (-not (Test-Path $TemplateFile)) {
     Write-Host "❌ テンプレートファイルが見つかりません: $TemplateFile" -ForegroundColor Red
     exit 1
 }
 $templateContent = (Get-Content $TemplateFile -Raw) -replace '{{DATE}}', $Today
+
 $aiPrompt = @"
 あなたは世界クラスのソフトウェアエンジニアリングアシスタントです。
 以下の開発コンテキストを分析し、指定されたフォーマットでアウトプットを生成してください。
@@ -76,12 +81,9 @@ $($changedFiles)
 *   具体的な差分 (diff):
 ```diff
 $($gitDiff)
-アウトプットのテンプレート (この下に生成してください)
-(ここにコミットメッセージ) ---LOG_SEPARATOR--- $($templateContent) "@
-```
 ```
 
----
+========================================
 
 ### アウトプットのテンプレート (この下に生成してください)
 
