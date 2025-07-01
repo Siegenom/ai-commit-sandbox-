@@ -61,7 +61,7 @@ if (-not (Test-Path $TemplateFile)) {
     Write-Host "❌ テンプレートファイルが見つかりません: $TemplateFile" -ForegroundColor Red
     exit 1
 }
-$templateContent = (Get-Content $TemplateFile -Raw) -replace '{{DATE}}', $Today
+$templateContent = (Get-Content $TemplateFile -Raw -Encoding UTF8) -replace '{{DATE}}', $Today
 
 $aiPrompt = @"
 あなたは世界クラスのソフトウェアエンジニアリングアシスタントです。
@@ -93,7 +93,7 @@ $($templateContent)
 "@
 
 # 3. ユーザーにプロンプトを提示し、AIの回答を待つ
-$aiPrompt | Set-Clipboard
+Set-Clipboard -Value $aiPrompt
 Write-Host "✅ AIへの指示プロンプトを生成し、クリップボードにコピーしました。" -ForegroundColor Green
 Write-Host "---"
 Write-Host "（プロンプトはクリップボードにコピー済みです。AIチャットに貼り付けてください）"
