@@ -144,7 +144,7 @@ if ($editResponse -match '^[Ee]') {
 
 # 6. コミットと日誌の保存、プッシュを実行
 Write-Host "📝 開発日誌を保存します: $LogFile"
-Set-Content -Path $LogFile -Value $logContent
+Set-Content -Path $LogFile -Value $logContent -Encoding UTF8
 git add $LogFile
 
 Write-Host "💬 コミットを実行します (Message: $commitMsg)" -ForegroundColor Cyan
