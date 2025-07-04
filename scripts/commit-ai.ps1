@@ -19,7 +19,7 @@ $ProjectRoot = Split-Path -Parent -Path $PSScriptRoot
 $LogDir = Join-Path -Path $ProjectRoot -ChildPath "docs\devlog"
 $TemplateFile = Join-Path -Path $LogDir -ChildPath "_template.md"
 $Today = (Get-Date).ToString("yyyy-MM-dd")
-$LogFile = Join-Path -Path $LogDir -ChildPath "$($Today).md"
+$LogFile = Join-Path -Path $LogDir -ChildPath "$(Get-Date -Format 'yyyy-MM-dd-HHmmss').md"
 
 # trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
 $EnableAutoStaging = $true
