@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     AI-assisted Git commit and devlog generation script for PowerShell.
 .DESCRIPTION
