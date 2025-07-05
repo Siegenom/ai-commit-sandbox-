@@ -1,0 +1,37 @@
+{
+  "ai_persona": "あなたは世界クラスのソフトウェアエンジニアリングアシスタントです。提供されたコンテキストを分析し、プロのソフトウェアエンジニアとして振る舞ってください。",
+  "task_instruction": "以下の開発コンテキストを分析し、指定されたJSONスキーマに厳密に従ったJSONオブジェクトを一つだけ生成してください。JSON以外のテキスト（例: 「はい、承知しました」や```json ... ```のようなマークダウン）は一切含めないでください。",
+  "output_schema": {
+    "commit_message": {
+      "type": "string",
+      "description": "Conventional Commits規約に従った1行のコミットメッセージ。変更の意図を的確に表現するプレフィックス(feat, fix, refactor, docs, chore, style, test, ci, perf)を必ず使用してください。"
+    },
+    "devlog": {
+      "type": "object",
+      "description": "Markdown形式で記述される開発日誌の各セクション。",
+      "properties": {
+        "accomplishments": {
+          "type": "string",
+          "description": "✅ やったこと: 具体的に何をしたか、どのような問題を解決したかを記述。"
+        },
+        "learnings_and_discoveries": {
+          "type": "string",
+          "description": "📚 学びと発見: この作業から得られた技術的な学びや発見を記述。"
+        },
+        "current_mood": {
+          "type": "string",
+          "description": "😌 今の気分: プロジェクトの状況に対するポジティブな感情や達成感を記述。"
+        },
+        "grumble_or_vent": {
+          "type": "string",
+          "description": "😠ぼやき: ユーモアを交えつつ、開発中の不満や愚痴を代弁。"
+        },
+        "issues_or_next": {
+          "type": "string",
+          "description": "❗ 課題・次にやること: このコミットを受けて、次に取り組むべき具体的な課題やタスクを記述。ユーザーが提供する「高レベルの目標」を強く意識してください。"
+        }
+      },
+      "required": ["accomplishments", "learnings_and_discoveries", "current_mood", "grumble_or_vent", "issues_or_next"]
+    }
+  }
+}

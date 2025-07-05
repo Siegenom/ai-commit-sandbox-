@@ -21,8 +21,28 @@ $ConfigFile = Join-Path -Path $PSScriptRoot -ChildPath "prompt-config.json"
 $Today = (Get-Date).ToString("yyyy-MM-dd")
 $LogFile = Join-Path -Path $LogDir -ChildPath "$(Get-Date -Format 'yyyy-MM-dd-HHmmss').md"
 
+# trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
+$EnableAutoStaging = $true
+
 # --- Main Logic ---
 Write-Host "🤖 AIによるコミットと日誌生成を開始します..." -ForegroundColor Cyan
+
+if ($EnableAutoStaging) {
+    # 未ステージの変更を確認し、ユーザーに追加を促す
+    git diff --quiet
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "🔍 未ステージの変更が検出されました。" -ForegroundColor Yellow
+        git status --short
+        $response = Read-Host "👉 これらの変更をすべてステージングしますか？ (y/n)"
+        if ($response -match '^[Yy]') {
+            Write-Host "✅ すべての変更をステージングします..." -ForegroundColor Green
+            git add .
+        }
+        else {
+            Write-Host "ℹ️ ステージングはスキップされました。現在ステージング済みの変更のみがコミット対象になります。" -ForegroundColor Yellow
+        }
+    }
+}
 
 # 1. Gitからコンテキストを収集
 Write-Host "🔍 Gitから情報を収集中..."
