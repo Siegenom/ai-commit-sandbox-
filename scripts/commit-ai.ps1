@@ -17,32 +17,12 @@
 $PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 $ProjectRoot = Split-Path -Parent -Path $PSScriptRoot
 $LogDir = Join-Path -Path $ProjectRoot -ChildPath "docs\devlog"
-$TemplateFile = Join-Path -Path $LogDir -ChildPath "_template.md"
+$ConfigFile = Join-Path -Path $PSScriptRoot -ChildPath "prompt-config.json"
 $Today = (Get-Date).ToString("yyyy-MM-dd")
 $LogFile = Join-Path -Path $LogDir -ChildPath "$(Get-Date -Format 'yyyy-MM-dd-HHmmss').md"
 
-# trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
-$EnableAutoStaging = $true
-
 # --- Main Logic ---
 Write-Host "🤖 AIによるコミットと日誌生成を開始します..." -ForegroundColor Cyan
-
-if ($EnableAutoStaging) {
-    # 未ステージの変更を確認し、ユーザーに追加を促す
-    git diff --quiet
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "🔍 未ステージの変更が検出されました。" -ForegroundColor Yellow
-        git status --short
-        $response = Read-Host "👉 これらの変更をすべてステージングしますか？ (y/n)"
-        if ($response -match '^[Yy]') {
-            Write-Host "✅ すべての変更をステージングします..." -ForegroundColor Green
-            git add .
-        }
-        else {
-            Write-Host "ℹ️ ステージングはスキップされました。現在ステージング済みの変更のみがコミット対象になります。" -ForegroundColor Yellow
-        }
-    }
-}
 
 # 1. Gitからコンテキストを収集
 Write-Host "🔍 Gitから情報を収集中..."
@@ -53,68 +33,95 @@ if ([string]::IsNullOrEmpty($gitDiff)) {
     exit 1
 }
 
-$changedFiles = (git diff --staged --name-only | ForEach-Object { "  - $_" }) -join [System.Environment]::NewLine
 $currentBranch = (git rev-parse --abbrev-ref HEAD | Out-String).Trim()
+$stagedFiles = (git diff --staged --name-only | Out-String).Trim().Split([System.Environment]::NewLine) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
-# 2. テンプレートを読み込み、AIへのプロンプトを生成
-if (-not (Test-Path $TemplateFile)) {
-    Write-Host "❌ テンプレートファイルが見つかりません: $TemplateFile" -ForegroundColor Red
+# 2. ユーザーから高レベルの目標を取得
+Write-Host "🎯 このコミットの主な目標を簡潔に入力してください:" -ForegroundColor Cyan
+$highLevelGoal = Read-Host
+
+# 3. AIへの入力JSONを生成
+Write-Host "📝 設定ファイルとコンテキストからAIへの入力JSONを生成中..."
+if (-not (Test-Path $ConfigFile)) {
+    Write-Host "❌ 設定ファイルが見つかりません: $ConfigFile" -ForegroundColor Red
     exit 1
 }
-$templateContent = (Get-Content $TemplateFile -Raw -Encoding UTF8) -replace '{{DATE}}', $Today
+$config = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
-# ヒアドキュメントを避け、より堅牢な文字列配列の結合でプロンプトを定義する
-$promptLines = @(
-    'あなたは世界クラスのソフトウェアエンジニアリングアシスタントです。',
-    '以下の開発コンテキストを分析し、指定されたフォーマットでアウトプットを生成してください。',
-    '',
-    '**重要: 出力フォーマット**',
-    '1行目: Conventional Commits形式のコミットメッセージのみ。',
-    '2行目: `---LOG_SEPARATOR---` という区切り文字のみ。',
-    '3行目以降: Markdown形式の開発日誌。開発日誌は、提供されたテンプレートの指示に従って記述してください。',
-    '',
-    '========================================',
-    '',
-    '### 開発コンテキスト (Development Context)',
-    ('* 現在のブランチ: {0}' -f $currentBranch),
-    '*   変更されたファイル:',
-    $changedFiles,
-    '*   具体的な差分 (diff):'
-    '```diff',
-    $gitDiff,
-    '```',
-    '',
-    '========================================',
-    '',
-    '### アウトプットのテンプレート (この下に生成してください)',
-    '',
-    '(ここにコミットメッセージ)',
-    '---LOG_SEPARATOR---',
-    $templateContent
-)
-$aiPrompt = $promptLines -join [System.Environment]::NewLine
+# 入力用JSONオブジェクトを構築
+$inputJson = [PSCustomObject]@{
+    system_prompt = [PSCustomObject]@{
+        persona                  = $config.ai_persona
+        task                     = $config.task_instruction
+        output_schema_definition = $config.output_schema
+    }
+    user_context  = [PSCustomObject]@{
+        high_level_goal = $highLevelGoal
+        git_context     = [PSCustomObject]@{
+            current_branch = $currentBranch
+            staged_files   = $stagedFiles
+            diff           = $gitDiff
+        }
+    }
+}
 
-# 3. ユーザーにプロンプトを提示し、AIの回答を待つ
+# JSONに変換
+$aiPrompt = $inputJson | ConvertTo-Json -Depth 10
+
+# 4. ユーザーにプロンプトを提示し、AIの回答を待つ
 Set-Clipboard -Value $aiPrompt
 Write-Host "✅ AIへの指示プロンプトを生成し、クリップボードにコピーしました。" -ForegroundColor Green
 Write-Host "---"
 Write-Host "（プロンプトはクリップボードにコピー済みです。AIチャットに貼り付けてください）"
 Write-Host "---"
-Read-Host "👆 AIが生成した全文をクリップボードにコピーしてから、このウィンドウでEnterキーを押してください"
+Read-Host "👆 AIが生成したJSONオブジェクトをクリップボードにコピーしてから、このウィンドウでEnterキーを押してください"
 
 $aiResponse = Get-Clipboard
 
-# 4. AIの応答をパースする
-$responseParts = $aiResponse -split '---LOG_SEPARATOR---', 2
-$commitMsg = $responseParts[0].Trim()
-$logContent = $responseParts[1].Trim()
+# 5. AIのJSON応答をパースする
+Write-Host "🔄 AIのJSON応答をパースしています..."
+try {
+    $aiJson = $aiResponse | ConvertFrom-Json -ErrorAction Stop
+    $commitMsg = $aiJson.commit_message.Trim()
+    $devlog = $aiJson.devlog
 
-if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent)) {
-    Write-Host "❌ AIの応答のパースに失敗しました。クリップボードの内容とフォーマットを確認してください。" -ForegroundColor Red
+    # 開発日誌のMarkdownコンテンツを再構築
+    # 脆弱性を回避するため、テンプレートとデータを分離する
+    $logTemplate = @'
+開発日誌: {0}
+
+✅ やったこと (Accomplishments)
+{1}
+
+📚 学びと発見 (Learnings & Discoveries)
+{2}
+
+😌 今の気分 (Current Mood)
+{3}
+
+😠ぼやき (Grumble / Vent)
+{4}
+
+❗ 課題・次にやること (Issues / Next)
+{5}
+'@
+    $logContent = ($logTemplate -f $Today, $devlog.accomplishments.Trim(), $devlog.learnings_and_discoveries.Trim(), $devlog.current_mood.Trim(), $devlog.grumble_or_vent.Trim(), $devlog.issues_or_next.Trim()).Trim()
+
+}
+catch {
+    Write-Host "❌ AIの応答のパースに失敗しました。クリップボードの内容が有効なJSONであることを確認してください。" -ForegroundColor Red
+    Write-Host "--- エラー詳細 ---"
+    Write-Host $_.Exception.Message
+    Write-Host "--------------------"
     exit 1
 }
 
-# 5. ユーザーによる確認と編集
+if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent) -or $null -eq $devlog) {
+    Write-Host "❌ AIの応答に必要なキー（commit_message, devlog）が含まれていないか、内容が空です。JSONの内容を確認してください。" -ForegroundColor Red
+    exit 1
+}
+
+# 6. ユーザーによる確認と編集
 Write-Host "---" -ForegroundColor DarkGray
 Write-Host "🤖 AIが以下の内容を生成しました:" -ForegroundColor Green
 Write-Host "Commit Message: $($commitMsg)" -ForegroundColor Yellow
@@ -143,7 +150,7 @@ if ($editResponse -match '^[Ee]') {
     exit 0
 }
 
-# 6. コミットと日誌の保存、プッシュを実行
+# 7. コミットと日誌の保存、プッシュを実行
 Write-Host "📝 開発日誌を保存します: $LogFile"
 Set-Content -Path $LogFile -Value $logContent -Encoding UTF8
 git add $LogFile
