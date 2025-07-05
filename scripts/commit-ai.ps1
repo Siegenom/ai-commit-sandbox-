@@ -105,27 +105,23 @@ try {
     $commitMsg = $aiJson.commit_message.Trim()
     $devlog = $aiJson.devlog
 
-    # 開発日誌のMarkdownコンテンツを再構築
-    # 脆弱性を回避するため、テンプレートとデータを分離する
-    $logTemplate = @'
-開発日誌: {0}
+    # 開発日誌のMarkdownコンテンツを動的に再構築
+    # prompt-config.jsonのスキーマ定義に追従する
+    $logContentParts = New-Object System.Collections.ArrayList
+    $logContentParts.Add("開発日誌: $Today") | Out-Null
 
-✅ やったこと (Accomplishments)
-{1}
-
-📚 学びと発見 (Learnings & Discoveries)
-{2}
-
-😌 今の気分 (Current Mood)
-{3}
-
-😠ぼやき (Grumble / Vent)
-{4}
-
-❗ 課題・次にやること (Issues / Next)
-{5}
-'@
-    $logContent = ($logTemplate -f $Today, $devlog.accomplishments.Trim(), $devlog.learnings_and_discoveries.Trim(), $devlog.current_mood.Trim(), $devlog.grumble_or_vent.Trim(), $devlog.issues_or_next.Trim()).Trim()
+    # devlogオブジェクトのプロパティを動的にループ
+    foreach ($property in $devlog.PSObject.Properties) {
+        $propName = $property.Name
+        $propValue = $property.Value.ToString().Trim()
+        
+        # prompt-config.jsonから対応するdescriptionを取得して見出しにする
+        $propDescription = $config.output_schema.devlog.properties.$propName.description
+        
+        $logContentParts.Add("`n" + $propDescription) | Out-Null
+        $logContentParts.Add($propValue) | Out-Null
+    }
+    $logContent = ($logContentParts -join [System.Environment]::NewLine).Trim()
 
 }
 catch {
