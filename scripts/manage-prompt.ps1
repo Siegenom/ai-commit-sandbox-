@@ -33,15 +33,17 @@ function Edit-TextInEditor {
 
     # 2. If not set, fallback to OS defaults
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        if ($PSVersionTable.Platform -eq 'Win32NT') {
+        # Use the fundamental $env:OS for Windows detection for maximum compatibility.
+        if ($env:OS -eq 'Windows_NT') {
             $editorCommand = "notepad.exe"
         }
-        elseif ($PSVersionTable.Platform -eq 'Unix') {
-            # Differentiate between macOS and Linux. 'open' command is a strong indicator of macOS.
+        # For Unix-like systems, use the more modern $PSVersionTable, but handle older versions.
+        elseif ($PSVersionTable.Platform -eq 'MacOS' -or $PSVersionTable.Platform -eq 'Unix') {
             if (Get-Command open -ErrorAction SilentlyContinue) {
+                # 'open -t' opens with the default text editor and '-W' waits for it to close.
                 $editorCommand = "open -W -t"
             }
-            else { # Assume Linux otherwise
+            else { # Assume Linux if 'open' is not available
                 $editors = @("code --wait", "nano", "vim", "vi")
                 $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
             }
