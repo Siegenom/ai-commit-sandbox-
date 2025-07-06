@@ -37,15 +37,18 @@ function Edit-TextInEditor {
 
     # 2. If not set, fallback to OS defaults
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        if ($IsWindows) {
+        if ($PSVersionTable.Platform -eq 'Win32NT') {
             $editorCommand = "notepad.exe"
-        } elseif ($IsMacOS) {
-            # 'open -t' opens with the default text editor and '-W' waits for it to close.
-            $editorCommand = "open -W -t"
-        } elseif ($IsLinux) {
-            # Prioritize common modern editors, then fall back to classics
-            $editors = @("code --wait", "nano", "vim", "vi")
-            $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
+        }
+        elseif ($PSVersionTable.Platform -eq 'Unix') {
+            # Differentiate between macOS and Linux. 'open' command is a strong indicator of macOS.
+            if (Get-Command open -ErrorAction SilentlyContinue) {
+                $editorCommand = "open -W -t"
+            }
+            else { # Assume Linux otherwise
+                $editors = @("code --wait", "nano", "vim", "vi")
+                $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
+            }
         }
     }
 
