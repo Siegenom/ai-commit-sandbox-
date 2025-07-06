@@ -30,7 +30,10 @@ function Edit-TextInEditor {
     Write-Host "✏️ デフォルトのエディタで値を編集し、保存後、エディタを閉じてください。" -ForegroundColor Cyan
 
     # 1. Check for EDITOR/VISUAL environment variables (common on Linux/macOS)
-    $editorCommand = $env:EDITOR -or $env:VISUAL
+    $editorCommand = $env:EDITOR
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        $editorCommand = $env:VISUAL
+    }
 
     # 2. If not set, fallback to OS defaults
     if ([string]::IsNullOrEmpty($editorCommand)) {
