@@ -21,15 +21,47 @@ if (-not (Test-Path $ConfigFile)) {
 $config = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
 # --- Functions ---
-function Edit-TextInNotepad {
+function Edit-TextInEditor {
     param([string]$InitialContent)
-    Write-Host "✏️ メモ帳で値を編集し、保存後、メモ帳を閉じてください。" -ForegroundColor Cyan
+    Write-Host "✏️ デフォルトのエディタで値を編集し、保存後、エディタを閉じてください。" -ForegroundColor Cyan
+
+    # 1. Check for EDITOR/VISUAL environment variables (common on Linux/macOS)
+    $editorCommand = $env:EDITOR -or $env:VISUAL
+
+    # 2. If not set, fallback to OS defaults
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        if ($IsWindows) {
+            $editorCommand = "notepad.exe"
+        } elseif ($IsMacOS) {
+            # 'open -t' opens with the default text editor and '-W' waits for it to close.
+            $editorCommand = "open -W -t"
+        } elseif ($IsLinux) {
+            # Prioritize common modern editors, then fall back to classics
+            $editors = @("code --wait", "nano", "vim", "vi")
+            $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
+        }
+    }
+
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        Write-Error "編集に使用できるエディタが見つかりません。環境変数 EDITOR を設定してください。（例: code --wait）"
+        return $InitialContent # Return original content on failure
+    }
+
     $tempFile = New-TemporaryFile
-    Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
-    Start-Process notepad.exe -ArgumentList $tempFile.FullName -Wait
-    $newValue = Get-Content -Path $tempFile.FullName -Raw
-    Remove-Item $tempFile.FullName
-    return $newValue.Trim()
+    try {
+        Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
+
+        $process = Start-Process -FilePath $editorCommand.Split(' ')[0] -ArgumentList ($editorCommand.Split(' ', 2)[1], $tempFile.FullName) -Wait -PassThru -ErrorAction Stop
+        if ($process.ExitCode -ne 0) {
+            Write-Warning "エディタが0以外の終了コードで終了しました: $($process.ExitCode)"
+        }
+        return Get-Content -Path $tempFile.FullName -Raw
+    } catch {
+        Write-Error "エディタの起動またはファイルの読み込みに失敗しました: $_"
+        return $InitialContent
+    } finally {
+        if (Test-Path $tempFile.FullName) { Remove-Item $tempFile.FullName -Force }
+    }
 }
 
 function Select-DiaryProperty {
@@ -76,11 +108,11 @@ function Manage-PersonaAndInstructions {
         $choice = Read-Host "👉 選択してください"
         switch ($choice) {
             '1' {
-                $config.ai_persona = Edit-TextInNotepad -InitialContent $config.ai_persona
+                $config.ai_persona = Edit-TextInEditor -InitialContent $config.ai_persona
                 Write-Host "✅ ペルソナを更新しました。"
             }
             '2' {
-                $config.task_instruction = Edit-TextInNotepad -InitialContent $config.task_instruction
+                $config.task_instruction = Edit-TextInEditor -InitialContent $config.task_instruction
                 Write-Host "✅ タスク指示を更新しました。"
             }
             'b' { return }
@@ -121,7 +153,7 @@ function Manage-DiaryStructure {
             '3' {
                 $propToEdit = Select-DiaryProperty -config $config -PromptMessage "見出しを編集したい項目の番号を入力してください"
                 if ($null -ne $propToEdit) {
-                    $config.output_schema.devlog.properties.$propToEdit.description = Edit-TextInNotepad -InitialContent $config.output_schema.devlog.properties.$propToEdit.description
+                    $config.output_schema.devlog.properties.$propToEdit.description = Edit-TextInEditor -InitialContent $config.output_schema.devlog.properties.$propToEdit.description
                     Write-Host "✅ 見出しを更新しました。"
                 }
             }
@@ -147,7 +179,7 @@ function Manage-DiaryContent {
             $requiredVariables | ForEach-Object { Write-Host "- $_" }
         }
 
-        $newHint = Edit-TextInNotepad -InitialContent $originalHint
+        $newHint = Edit-TextInEditor -InitialContent $originalHint
 
         $missingVariables = $requiredVariables | Where-Object { $newHint -notlike "*$_*" }
 
