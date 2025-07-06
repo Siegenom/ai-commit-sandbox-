@@ -24,6 +24,50 @@ $LogFile = Join-Path -Path $LogDir -ChildPath "$(Get-Date -Format 'yyyy-MM-dd-HH
 # trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
 $EnableAutoStaging = $true
 
+# --- Functions ---
+function Edit-TextInEditor {
+    param([string]$InitialContent)
+    Write-Host "✏️ デフォルトのエディタで値を編集し、保存後、エディタを閉じてください。" -ForegroundColor Cyan
+
+    # 1. Check for EDITOR/VISUAL environment variables (common on Linux/macOS)
+    $editorCommand = $env:EDITOR -or $env:VISUAL
+
+    # 2. If not set, fallback to OS defaults
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        if ($IsWindows) {
+            $editorCommand = "notepad.exe"
+        } elseif ($IsMacOS) {
+            # 'open -t' opens with the default text editor and '-W' waits for it to close.
+            $editorCommand = "open -W -t"
+        } elseif ($IsLinux) {
+            # Prioritize common modern editors, then fall back to classics
+            $editors = @("code --wait", "nano", "vim", "vi")
+            $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
+        }
+    }
+
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        Write-Error "編集に使用できるエディタが見つかりません。環境変数 EDITOR を設定してください。（例: code --wait）"
+        return $InitialContent # Return original content on failure
+    }
+
+    $tempFile = New-TemporaryFile
+    try {
+        Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
+
+        $process = Start-Process -FilePath $editorCommand.Split(' ')[0] -ArgumentList ($editorCommand.Split(' ', 2)[1], $tempFile.FullName) -Wait -PassThru -ErrorAction Stop
+        if ($process.ExitCode -ne 0) {
+            Write-Warning "エディタが0以外の終了コードで終了しました: $($process.ExitCode)"
+        }
+        return Get-Content -Path $tempFile.FullName -Raw
+    } catch {
+        Write-Error "エディタの起動またはファイルの読み込みに失敗しました: $_"
+        return $InitialContent
+    } finally {
+        if (Test-Path $tempFile.FullName) { Remove-Item $tempFile.FullName -Force }
+    }
+}
+
 # --- Main Logic ---
 Write-Host "🤖 AIによるコミットと日誌生成を開始します..." -ForegroundColor Cyan
 
@@ -153,13 +197,8 @@ if ($editResponse -match '^[Ee]') {
         $commitMsg = $newCommitMsg
     }
 
-    Write-Host "✏️ 開発日誌をメモ帳で開きます。編集して保存後、メモ帳を閉じてください。" -ForegroundColor Cyan
-    $tempLogFile = New-TemporaryFile
-    Set-Content -Path $tempLogFile.FullName -Value $logContent -Encoding UTF8
-    Start-Process notepad.exe -ArgumentList $tempLogFile.FullName -Wait
-    $logContent = Get-Content -Path $tempLogFile.FullName -Raw
-    Remove-Item $tempLogFile.FullName
-    Write-Host "✅ 編集内容を反映しました。" -ForegroundColor Green
+    $logContent = Edit-TextInEditor -InitialContent $logContent
+    Write-Host "✅ 編集内容を反映しました。"
 
 } elseif ($editResponse -match '^[Nn]') {
     Write-Host "❌ 処理を中断しました。" -ForegroundColor Red
