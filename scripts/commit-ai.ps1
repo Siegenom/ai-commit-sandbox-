@@ -58,7 +58,14 @@ function Edit-TextInEditor {
     try {
         Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
 
-        $process = Start-Process -FilePath $editorCommand.Split(' ')[0] -ArgumentList ($editorCommand.Split(' ', 2)[1], $tempFile.FullName) -Wait -PassThru -ErrorAction Stop
+        $editorParts = $editorCommand.Split(' ', 2)
+        $editorExe = $editorParts[0]
+        $editorArgs = if ($editorParts.Length -gt 1) {
+            @($editorParts[1], $tempFile.FullName)
+        } else {
+            $tempFile.FullName
+        }
+        $process = Start-Process -FilePath $editorExe -ArgumentList $editorArgs -Wait -PassThru -ErrorAction Stop
         if ($process.ExitCode -ne 0) {
             Write-Warning "エディタが0以外の終了コードで終了しました: $($process.ExitCode)"
         }
@@ -209,6 +216,13 @@ if ($editResponse -match '^[Ee]') {
 }
 
 # 7. コミットと日誌の保存、プッシュを実行
+
+# ログディレクトリが存在しない場合は作成する
+if (-not (Test-Path -Path $LogDir -PathType Container)) {
+    Write-Host "ℹ️ ログディレクトリが存在しないため作成します: $LogDir" -ForegroundColor Yellow
+    New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+}
+
 Write-Host "📝 開発日誌を保存します: $LogFile"
 Set-Content -Path $LogFile -Value $logContent -Encoding UTF8
 git add $LogFile

@@ -54,7 +54,14 @@ function Edit-TextInEditor {
     try {
         Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
 
-        $process = Start-Process -FilePath $editorCommand.Split(' ')[0] -ArgumentList ($editorCommand.Split(' ', 2)[1], $tempFile.FullName) -Wait -PassThru -ErrorAction Stop
+        $editorParts = $editorCommand.Split(' ', 2)
+        $editorExe = $editorParts[0]
+        $editorArgs = if ($editorParts.Length -gt 1) {
+            @($editorParts[1], $tempFile.FullName)
+        } else {
+            $tempFile.FullName
+        }
+        $process = Start-Process -FilePath $editorExe -ArgumentList $editorArgs -Wait -PassThru -ErrorAction Stop
         if ($process.ExitCode -ne 0) {
             Write-Warning "エディタが0以外の終了コードで終了しました: $($process.ExitCode)"
         }
