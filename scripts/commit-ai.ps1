@@ -1,83 +1,49 @@
 ﻿<#
 .SYNOPSIS
     AI-assisted Git commit and devlog generation script for PowerShell.
-.DESCRIPTION
-    This script automates the process of creating a commit and a development log.
-    It gathers context from Git, generates a prompt for an AI, retrieves the AI's response
-    from the clipboard, and then performs the git commit and push operations.
 #>
 
 # --- Environment Setup ---
-# コンソールの入出力エンコーディングをUTF-8に設定し、文字化けを防ぐ
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Configuration ---
-# スクリプトの場所を基準にパスを自動設定
 $PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 $ProjectRoot = Split-Path -Parent -Path $PSScriptRoot
 $LogDir = Join-Path -Path $ProjectRoot -ChildPath "docs\devlog"
 $ConfigFile = Join-Path -Path $PSScriptRoot -ChildPath "prompt-config.json"
 $Today = (Get-Date).ToString("yyyy-MM-dd")
 $LogFile = Join-Path -Path $LogDir -ChildPath "$(Get-Date -Format 'yyyy-MM-dd-HHmmss').md"
-
-# trueに設定すると、スクリプト実行時にステージングされていない変更を自動で追加するか尋ねます。
 $EnableAutoStaging = $true
 
 # --- Functions ---
 function Edit-TextInEditor {
     param([string]$InitialContent)
     Write-Host "✏️ デフォルトのエディタで値を編集し、保存後、エディタを閉じてください。" -ForegroundColor Cyan
-
-    # 1. Check for EDITOR/VISUAL environment variables (common on Linux/macOS)
     $editorCommand = $env:EDITOR
+    if ([string]::IsNullOrEmpty($editorCommand)) { $editorCommand = $env:VISUAL }
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        $editorCommand = $env:VISUAL
-    }
-
-    # 2. If not set, fallback to OS defaults
-    if ([string]::IsNullOrEmpty($editorCommand)) {
-        # Use the fundamental $env:OS for Windows detection for maximum compatibility.
-        if ($env:OS -eq 'Windows_NT') {
-            $editorCommand = "notepad.exe"
-        }
-        # For Unix-like systems, use the more modern $PSVersionTable, but handle older versions.
+        if ($env:OS -eq 'Windows_NT') { $editorCommand = "notepad.exe" }
         elseif ($PSVersionTable.Platform -eq 'MacOS' -or $PSVersionTable.Platform -eq 'Unix') {
-            if (Get-Command open -ErrorAction SilentlyContinue) {
-                # 'open -t' opens with the default text editor and '-W' waits for it to close.
-                $editorCommand = "open -W -t"
-            }
-            else { # Assume Linux if 'open' is not available
+            if (Get-Command open -ErrorAction SilentlyContinue) { $editorCommand = "open -W -t" }
+            else {
                 $editors = @("code --wait", "nano", "vim", "vi")
                 $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
             }
         }
     }
-
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        Write-Error "編集に使用できるエディタが見つかりません。環境変数 EDITOR を設定してください。（例: code --wait）"
-        return $InitialContent # Return original content on failure
+        Write-Error "編集に使用できるエディタが見つかりません。"; return $InitialContent
     }
-
     $tempFile = New-TemporaryFile
     try {
         Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
-
-        $editorParts = $editorCommand.Split(' ', 2)
-        $editorExe = $editorParts[0]
-        $editorArgs = if ($editorParts.Length -gt 1) {
-            @($editorParts[1], $tempFile.FullName)
-        } else {
-            $tempFile.FullName
-        }
-        $process = Start-Process -FilePath $editorExe -ArgumentList $editorArgs -Wait -PassThru -ErrorAction Stop
-        if ($process.ExitCode -ne 0) {
-            Write-Warning "エディタが0以外の終了コードで終了しました: $($process.ExitCode)"
-        }
+        $editorParts = $editorCommand.Split(' ', 2); $editorExe = $editorParts[0]
+        $editorArgs = if ($editorParts.Length -gt 1) { @($editorParts[1], $tempFile.FullName) } else { $tempFile.FullName }
+        Start-Process -FilePath $editorExe -ArgumentList $editorArgs -Wait -PassThru -ErrorAction Stop
         return Get-Content -Path $tempFile.FullName -Raw
     } catch {
-        Write-Error "エディタの起動またはファイルの読み込みに失敗しました: $_"
-        return $InitialContent
+        Write-Error "エディタの起動またはファイルの読み込みに失敗しました: $_"; return $InitialContent
     } finally {
         if (Test-Path $tempFile.FullName) { Remove-Item $tempFile.FullName -Force }
     }
@@ -87,7 +53,6 @@ function Edit-TextInEditor {
 Write-Host "🤖 AIによるコミットと日誌生成を開始します..." -ForegroundColor Cyan
 
 if ($EnableAutoStaging) {
-    # 未ステージの変更を確認し、ユーザーに追加を促す
     git diff --quiet
     if ($LASTEXITCODE -ne 0) {
         Write-Host "🔍 未ステージの変更が検出されました。" -ForegroundColor Yellow
@@ -96,121 +61,95 @@ if ($EnableAutoStaging) {
         if ($response -match '^[Yy]') {
             Write-Host "✅ すべての変更をステージングします..." -ForegroundColor Green
             git add .
-        }
-        else {
-            Write-Host "ℹ️ ステージングはスキップされました。現在ステージング済みの変更のみがコミット対象になります。" -ForegroundColor Yellow
+        } else {
+            Write-Host "ℹ️ ステージングはスキップされました。" -ForegroundColor Yellow
         }
     }
 }
 
-# 1. Gitからコンテキストを収集
 Write-Host "🔍 Gitから情報を収集中..."
 $gitDiff = (git diff --staged | Out-String).Trim()
-
 if ([string]::IsNullOrEmpty($gitDiff)) {
     Write-Host '⚠️ ステージングされた変更がありません。''git add''でコミットしたい変更をステージングしてください。' -ForegroundColor Red
     exit 1
 }
-
 $currentBranch = (git rev-parse --abbrev-ref HEAD | Out-String).Trim()
 $stagedFiles = (git diff --staged --name-only | Out-String).Trim().Split([System.Environment]::NewLine) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
-# 2. ユーザーから高レベルの目標を取得
 Write-Host "🎯 このコミットの主な目標を簡潔に入力してください:" -ForegroundColor Cyan
 $highLevelGoal = Read-Host
 
-# 3. AIへの入力JSONを生成
 Write-Host "📝 設定ファイルとコンテキストからAIへの入力JSONを生成中..."
 try {
-    # [FIX] Read the file as a byte stream and convert to a UTF-8 string to prevent encoding issues.
-    # This is more robust than relying on Get-Content -Encoding.
-    $configBytes = Get-Content $ConfigFile -AsByteStream -Raw
-    $configContent = [System.Text.Encoding]::UTF8.GetString($configBytes)
-
-    # Remove UTF-8 BOM if present, although the byte stream method should handle it.
+    $configContent = Get-Content $ConfigFile -Raw -Encoding UTF8
     if ($configContent -and $configContent.StartsWith([char]0xFEFF)) {
         $configContent = $configContent.Substring(1)
     }
-    if ([string]::IsNullOrWhiteSpace($configContent)) {
-        throw "設定ファイル '$ConfigFile' が空か、空白文字のみで構成されています。"
-    }
-    $config = $configContent | ConvertFrom-Json -ErrorAction Stop
+    $config = $configContent | ConvertFrom-Json
 }
 catch {
     Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red
-    Write-Host "--- エラー詳細 ---" -ForegroundColor Yellow
-    Write-Host $_.Exception.Message
-    Write-Host "--------------------"
-    Write-Host "ファイルが有効なJSON形式であり、BOMなしのUTF-8エンコーディングで保存されていることを確認してください。" -ForegroundColor Yellow
+    Write-Host "--- エラー詳細 ---"; Write-Host $_.Exception.Message
     exit 1
 }
 
-# 入力用JSONオブジェクトを構築
+# [MODIFIED] Add language instruction to the main task instruction.
+$langInstruction = ""
+if ($config.devlog_language -eq 'japanese') {
+    $langInstruction = "The entire 'devlog' object must be written in Japanese."
+} else {
+    $langInstruction = "The entire 'devlog' object must be written in English."
+}
+$fullTaskInstruction = "$($config.task_instruction) $langInstruction"
+
+
 $inputJson = [PSCustomObject]@{
-    system_prompt = [PSCustomObject]@{
-        persona                 = $config.ai_persona
-        task                    = $config.task_instruction
-        output_schema_definition = $config.output_schema
+    system_prompt = @{ 
+        persona = $config.ai_persona
+        task = $fullTaskInstruction
+        output_schema_definition = $config.output_schema 
     }
-    user_context  = [PSCustomObject]@{
+    user_context  = @{ 
         high_level_goal = $highLevelGoal
-        git_context     = [PSCustomObject]@{
+        git_context = @{ 
             current_branch = $currentBranch
-            staged_files   = $stagedFiles
-            diff           = $gitDiff
-        }
+            staged_files = $stagedFiles
+            diff = $gitDiff 
+        } 
     }
 }
-
-# JSONに変換
 $aiPrompt = $inputJson | ConvertTo-Json -Depth 10
 
-# 4. AIとの対話 (APIモード or 手動モード)
 $aiResponse = ""
 if ($config.use_api_mode) {
-    # --- APIモード ---
     Write-Host "🤖 APIを呼び出しています... ($($config.api_provider))" -ForegroundColor Cyan
-
-    $adaptersDir = Join-Path -Path $PSScriptRoot -ChildPath "api_adapters"
-    if (-not (Test-Path $adaptersDir -PathType Container)) {
-        Write-Host "❌ APIアダプターのディレクトリが見つかりません！" -ForegroundColor Red
-        Write-Host "👉 'scripts' フォルダ内に 'api_adapters' という名前のフォルダを作成してください。" -ForegroundColor Yellow
-        exit 1
-    }
-
-    $adapterPath = Join-Path -Path $adaptersDir -ChildPath "invoke-$($config.api_provider)-api.ps1"
+    $adapterPath = Join-Path -Path $PSScriptRoot -ChildPath "api_adapters\invoke-$($config.api_provider)-api.ps1"
     if (-not (Test-Path $adapterPath)) {
         Write-Host "❌ APIアダプターのファイルが見つかりません！" -ForegroundColor Red
-        Write-Host "👉 'scripts\api_adapters' フォルダ内に 'invoke-$($config.api_provider)-api.ps1' という名前のファイルを作成してください。" -ForegroundColor Yellow
-        $actualFiles = Get-ChildItem -Path $adaptersDir | Select-Object -ExpandProperty Name
-        if ($actualFiles) {
-            Write-Host "ℹ️ 'api_adapters' フォルダ内の現在のファイル:" -ForegroundColor Gray
-            $actualFiles | ForEach-Object { Write-Host "- $_" -ForegroundColor Gray }
-        } else {
-            Write-Host "ℹ️ 'api_adapters' フォルダは現在空です。" -ForegroundColor Gray
-        }
         exit 1
     }
+    
+    $tempPromptFile = $null
+    try {
+        $tempPromptFile = New-TemporaryFile
+        Set-Content -Path $tempPromptFile.FullName -Value $aiPrompt -Encoding UTF8
+        $aiResponse = & $adapterPath -PromptFilePath $tempPromptFile.FullName -ApiConfig $config
+    }
+    finally {
+        if ($null -ne $tempPromptFile -and (Test-Path $tempPromptFile.FullName)) {
+            Remove-Item -Path $tempPromptFile.FullName -Force
+        }
+    }
 
-    # APIアダプターを実行し、応答を取得
-    $aiResponse = & $adapterPath -AiPrompt $aiPrompt -ApiConfig $config
-
-    # アダプターからのエラーをチェック
     if ($aiResponse -like "ERROR:*") {
-        Write-Host "❌ API処理中にエラーが発生しました。手動モードに切り替えるか、設定を確認してください。" -ForegroundColor Red
+        Write-Host "❌ API処理中にエラーが発生しました: $aiResponse" -ForegroundColor Red
         exit 1
     }
     Write-Host "✅ APIから応答を取得しました。" -ForegroundColor Green
-
 } else {
-    # --- 手動モード ---
     Set-Clipboard -Value $aiPrompt
     Write-Host "✅ AIへの指示プロンプトを生成し、クリップボードにコピーしました。" -ForegroundColor Green
-    Write-Host "---"
-    Write-Host "（プロンプトはクリップボードにコピー済みです。AIチャットに貼り付けてください）"
-    Write-Host "---"
     Read-Host "👆 AIが生成したJSONオブジェクトをクリップボードにコピーしてから、このウィンドウでEnterキーを押してください"
-
     $aiResponse = Get-Clipboard
 }
 
@@ -219,46 +158,34 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
     exit 1
 }
 
-# 5. AIのJSON応答をパースする
 Write-Host "🔄 AIのJSON応答をパースしています..."
 try {
-    $aiJson = $aiResponse | ConvertFrom-Json -ErrorAction Stop
+    $aiJson = $aiResponse | ConvertFrom-Json
     $commitMsg = $aiJson.commit_message.Trim()
     $devlog = $aiJson.devlog
 
-    # 開発日誌のMarkdownコンテンツを動的に再構築
-    # prompt-config.jsonのスキーマ定義に追従する
     $logContentParts = New-Object System.Collections.ArrayList
-    $logContentParts.Add("開発日誌: $Today") | Out-Null
-
-    # devlogオブジェクトのプロパティを動的にループ
+    $logContentParts.Add("## 開発日誌: $Today") | Out-Null
     foreach ($property in $devlog.PSObject.Properties) {
         $propName = $property.Name
         $propValue = $property.Value.ToString().Trim()
-        
-        # prompt-config.jsonから対応するdescriptionを取得して見出しにする
         $propDescription = $config.output_schema.devlog.properties.$propName.description
-        
-        $logContentParts.Add("`n" + $propDescription) | Out-Null
-        $logContentParts.Add($propValue) | Out-Null
+        $logContentParts.Add("`n### $propDescription") | Out-Null
+        $logContentParts.Add("`n$propValue") | Out-Null
     }
     $logContent = ($logContentParts -join [System.Environment]::NewLine).Trim()
-
 }
 catch {
-    Write-Host "❌ AIの応答のパースに失敗しました。クリップボードの内容が有効なJSONであることを確認してください。" -ForegroundColor Red
-    Write-Host "--- エラー詳細 ---"
-    Write-Host $_.Exception.Message
-    Write-Host "--------------------"
+    Write-Host "❌ AIの応答のパースに失敗しました。" -ForegroundColor Red
+    Write-Host "--- エラー詳細 ---"; Write-Host $_.Exception.Message
     exit 1
 }
 
-if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent) -or $null -eq $devlog) {
-    Write-Host "❌ AIの応答に必要なキー（commit_message, devlog）が含まれていないか、内容が空です。JSONの内容を確認してください。" -ForegroundColor Red
+if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent)) {
+    Write-Host "❌ AIの応答に必要なキーが含まれていないか、内容が空です。" -ForegroundColor Red
     exit 1
 }
 
-# 6. ユーザーによる確認と編集
 Write-Host "---" -ForegroundColor DarkGray
 Write-Host "🤖 AIが以下の内容を生成しました:" -ForegroundColor Green
 Write-Host "Commit Message: $($commitMsg)" -ForegroundColor Yellow
@@ -267,26 +194,19 @@ Write-Host $logContent
 Write-Host "---" -ForegroundColor DarkGray
 
 $editResponse = Read-Host '👉 この内容でコミットしますか？ 手動で編集する場合は ''e'' を入力してください (Y/n/e)'
-if ($editResponse -match '^[Ee]') { # 'e'が入力された場合
-    # 手動編集フロー
+if ($editResponse -match '^[Ee]') {
     $newCommitMsg = Read-Host "✏️ 新しいコミットメッセージを入力してください (Enterのみで現在の値を維持)"
     if (-not [string]::IsNullOrWhiteSpace($newCommitMsg)) {
         $commitMsg = $newCommitMsg
     }
-
     $logContent = Edit-TextInEditor -InitialContent $logContent
     Write-Host "✅ 編集内容を反映しました。"
-
-} elseif ($editResponse -notmatch '^[Yy]?$') { # Y, y, または空文字列(Enterのみ)でない場合
+} elseif ($editResponse -notmatch '^[Yy]?$') {
     Write-Host "❌ 処理を中断しました。" -ForegroundColor Red
     exit 0
 }
 
-# 7. コミットと日誌の保存、プッシュを実行
-
-# ログディレクトリが存在しない場合は作成する
 if (-not (Test-Path -Path $LogDir -PathType Container)) {
-    Write-Host "ℹ️ ログディレクトリが存在しないため作成します: $LogDir" -ForegroundColor Yellow
     New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
 }
 
@@ -295,7 +215,6 @@ Set-Content -Path $LogFile -Value $logContent -Encoding UTF8
 git add $LogFile
 
 Write-Host "💬 コミットを実行します (Message: $commitMsg)" -ForegroundColor Cyan
-# [FIXED] AIの応答に " が含まれていてもエラーにならないようにエスケープ処理を追加
 $escapedCommitMsg = $commitMsg -replace '"', '`"'
 git commit -m "$escapedCommitMsg"
  

@@ -1,110 +1,111 @@
-<#
-.SYNOPSIS
-    Invokes the Google Gemini API to get a response for a given prompt.
-.DESCRIPTION
-    This script acts as an adapter for the Gemini API.
-#>
-
+﻿# --- SCRIPT PARAMETERS ---
 param(
     [Parameter(Mandatory=$true)]
-    [string]$AiPrompt,
+    [string]$PromptFilePath,
 
     [Parameter(Mandatory=$true)]
     [PSCustomObject]$ApiConfig
 )
 
-$envVarName = $ApiConfig.api_key_env
-$apiKey = (Get-Item -Path "env:\$envVarName" -ErrorAction SilentlyContinue).Value
-if ([string]::IsNullOrEmpty($apiKey)) {
-    Write-Error "API key not found. Please set the '$($ApiConfig.api_key_env)' environment variable."
-    return "ERROR:API_KEY_NOT_FOUND"
-}
-
-# Parse the incoming JSON prompt
-$promptObject = $AiPrompt | ConvertFrom-Json
-
-# --- Build the request body safely, avoiding "dangerous structures" ---
-# This follows the "template and data separation" pattern.
-
-# Build the system instruction part
-$schemaJson = $promptObject.system_prompt.output_schema_definition | ConvertTo-Json -Depth 10 -Compress
-$systemInstructionParts = @(
-    $promptObject.system_prompt.persona,
-    "",
-    $promptObject.system_prompt.task,
-    "",
-    "```json",
-    $schemaJson,
-    "```"
-)
-$systemInstructionText = $systemInstructionParts -join [System.Environment]::NewLine
-
-# Build the user context part
-$userContextParts = @(
-    "# User's Goal",
-    $promptObject.user_context.high_level_goal,
-    "",
-    "# Staged Files",
-    ($promptObject.user_context.git_context.staged_files -join [System.Environment]::NewLine),
-    "",
-    "# Git Diff",
-    "```diff",
-    $promptObject.user_context.git_context.diff,
-    "```"
-)
-$userContextText = $userContextParts -join [System.Environment]::NewLine
-
-# Assemble the final request body
-$requestBody = @{
-    systemInstruction = @{
-        parts = @(@{ text = $systemInstructionText })
-    }
-    contents = @(
-        @{
-            parts = @(
-                @{
-                    text = $userContextText
-                }
-            )
-        }
-    )
-} | ConvertTo-Json -Depth 10
-
-# --- Call the API ---
-# [FIXED] Use the -f format operator for safer string construction.
-# This avoids potential parsing issues with complex inline expressions like "$($...)"
-$apiUrlTemplate = '{0}?key={1}'
-$apiUrl = $apiUrlTemplate -f $ApiConfig.api_endpoints.gemini.url, $apiKey
-
-$headers = @{ 'Content-Type' = 'application/json; charset=utf-8' }
-
 try {
-    $responseJson = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $requestBody -ErrorAction Stop
+    # --- FILE READ ---
+    if (-not (Test-Path $PromptFilePath)) {
+        throw "Prompt file not found at path: $PromptFilePath"
+    }
+    $AiPrompt = Get-Content -Path $PromptFilePath -Raw -Encoding UTF8
+
+    # --- API KEY VALIDATION ---
+    $envVarName = $ApiConfig.api_key_env
+    $apiKey = (Get-Item -Path "env:\$envVarName" -ErrorAction SilentlyContinue).Value
+    if ([string]::IsNullOrEmpty($apiKey)) {
+        throw "API key not found in environment variable '$envVarName'."
+    }
+
+    # --- JSON PARSING ---
+    $promptObject = $AiPrompt | ConvertFrom-Json
+
+    # --- [NEW] CONTEXT VALIDATION ---
+    # Verify that the context passed from the main script is not empty.
+    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.high_level_goal)) {
+        throw "Validation Error: The 'high_level_goal' from the prompt file is empty. The main script may not be providing the user's goal."
+    }
+    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.git_context.diff)) {
+        throw "Validation Error: The 'git_diff' from the prompt file is empty. The main script may not be providing the Git context."
+    }
+
+    # --- REQUEST BODY CONSTRUCTION ---
     
-    # [FIXED] Add more robust checks for the response structure.
+    # Part 1: System Instruction
+    $schemaJson = $promptObject.system_prompt.output_schema_definition | ConvertTo-Json -Depth 10 -Compress
+    
+    # Use a literal here-string (@'...'@) as a template for robustness.
+    # This prevents the PowerShell parser from misinterpreting characters within the variables.
+    $systemInstructionTemplate = @'
+{0}
+
+{1}
+
+```json
+{2}
+```
+'@
+    $systemInstructionText = $systemInstructionTemplate -f $promptObject.system_prompt.persona, $promptObject.system_prompt.task, $schemaJson
+
+    $systemInstructionPayload = @{
+        parts = @(
+            @{ text = $systemInstructionText }
+        )
+    }
+
+    # Part 2: User Context
+    $stagedFilesText = $promptObject.user_context.git_context.staged_files -join [System.Environment]::NewLine
+    $userContextTemplate = @'
+# User's Goal
+{0}
+
+# Staged Files
+{1}
+
+# Git Diff
+```diff
+{2}
+```
+'@
+    $userContextText = $userContextTemplate -f $promptObject.user_context.high_level_goal, $stagedFilesText, $promptObject.user_context.git_context.diff
+
+    $userContentPayload = @{
+        parts = @(
+            @{ text = $userContextText }
+        )
+    }
+
+    # Part 3: Final Assembly
+    $finalPayload = @{
+        systemInstruction = $systemInstructionPayload
+        contents = @( $userContentPayload )
+    }
+    
+    $requestBody = $finalPayload | ConvertTo-Json -Depth 10
+    
+    # --- API CALL ---
+    $apiUrlTemplate = '{0}?key={1}'
+    $apiUrl = $apiUrlTemplate -f $ApiConfig.api_endpoints.gemini.url, $apiKey
+    $headers = @{ 'Content-Type' = 'application/json; charset=utf-8' }
+
+    $responseJson = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $requestBody -ErrorAction Stop
+
+    # --- RESPONSE PROCESSING ---
     $candidate = $responseJson.candidates | Select-Object -First 1
     $part = $candidate.content.parts | Select-Object -First 1
     $generatedText = $part.text.Trim()
-
     if ($null -ne $generatedText) {
-        # The AI might still wrap the JSON in backticks, so we need to clean it.
-        return $generatedText -replace '(?s)^```(json)?\s*|\s*```$'
+        $cleanedText = $generatedText -replace '(?s)^```(json)?\s*|\s*```$'
+        return $cleanedText
     } else {
-        Write-Error "API response did not contain the expected text content."
-        return "ERROR:API_INVALID_RESPONSE"
+        throw "API response did not contain the expected text content."
     }
 } catch {
-    Write-Error "Error calling Gemini API: $($_.Exception.Message)"
-    if ($_.Exception.Response) {
-        try {
-            $errorStream = $_.Exception.Response.GetResponseStream()
-            $streamReader = New-Object System.IO.StreamReader($errorStream)
-            $errorDetails = $streamReader.ReadToEnd()
-            Write-Host "--- API Error Details ---`n$errorDetails" -ForegroundColor Red
-        } catch {
-            Write-Warning "Could not read the full error response body."
-        }
-    }
-    return "ERROR:API_CALL_FAILED"
+    $errorMessage = "FATAL ERROR in invoke-gemini-api.ps1: $($_.Exception.Message)"
+    # Return a formatted error string that the calling script can reliably check.
+    return "ERROR: $errorMessage"
 }
-
