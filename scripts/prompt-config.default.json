@@ -52,7 +52,7 @@
                 },
                 "grumble_or_vent": {
                     "type": "string",
-                    "description": "😠ぼやき (Grumble / Vent)",
+                      "description": "😠ぼやき (Grumble / Vent)",
                     "prompt_hints": {
                         "english": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf.",
                         "japanese": "この変更（{{git_diff}}）で開発者が苦労したであろう点を推測し、彼らに代わってユーモラスな「ぼやき」として表現してください。"
