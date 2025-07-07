@@ -24,6 +24,15 @@ try {
     # --- JSON PARSING ---
     $promptObject = $AiPrompt | ConvertFrom-Json
 
+    # --- [NEW] CONTEXT VALIDATION ---
+    # Verify that the context passed from the main script is not empty.
+    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.high_level_goal)) {
+        throw "Validation Error: The 'high_level_goal' from the prompt file is empty. The main script may not be providing the user's goal."
+    }
+    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.git_context.diff)) {
+        throw "Validation Error: The 'git_diff' from the prompt file is empty. The main script may not be providing the Git context."
+    }
+
     # --- REQUEST BODY CONSTRUCTION ---
     
     # Part 1: System Instruction
