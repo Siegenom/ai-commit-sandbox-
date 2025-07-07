@@ -1,79 +1,79 @@
 ﻿{
-    "use_api_mode": true,
-    "api_provider": "gemini",
-    "api_key_env": "GEMINI_API_KEY",
-    "devlog_language": "japanese",
-    "api_endpoints": {
-        "gemini": {
-            "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
-            "model": "gemini-1.5-flash-latest"
-        }
-    },
-    "ai_persona": "You are a world-class software engineering assistant. Analyze the provided context and act as a professional software engineer.",
-    "task_instruction": "Analyze the following development context and generate only one JSON object that strictly adheres to the specified JSON schema. Do not include any text other than the JSON object itself (e.g., no 'Yes, I understand' or markdown like ```json ... ```).",
-    "available_context_variables": {
-        "{{high_level_goal}}": "The high-level goal entered by the user",
-        "{{current_branch}}": "The current Git branch name",
-        "{{staged_files}}": "A list of staged files",
-        "{{git_diff}}": "The specific diff of staged changes"
-    },
-    "output_schema": {
-        "commit_message": {
-            "type": "string",
-            "description": "A single-line commit message following the Conventional Commits specification. You must use a prefix like feat, fix, refactor, docs, chore, style, test, ci, perf to accurately represent the intent of the change."
-        },
-        "devlog": {
-            "type": "object",
-            "description": "Each section of the development log, to be written in Markdown format.",
-            "properties": {
-                "accomplishments": {
-                    "type": "string",
-                    "description": "✅ やったこと (Accomplishments)",
-                    "prompt_hints": {
-                        "english": "Based on the user-provided context, especially {{git_diff}}, describe in detail the tasks accomplished, problems solved, and specific changes made.",
-                        "japanese": "ユーザーが提供したコンテキスト、特に{{git_diff}}を基に、達成したタスク、解決した問題、および行われた具体的な変更について詳細に記述してください。"
-                    }
-                },
-                "learnings_and_discoveries": {
-                    "type": "string",
-                    "description": "📚 学びと発見 (Learnings & Discoveries)",
-                    "prompt_hints": {
-                        "english": "Based on this work ({{git_diff}}), describe any technical learnings, new discoveries, or important concepts that were likely reaffirmed.",
-                        "japanese": "この作業（{{git_diff}}）を基に、技術的な学び、新しい発見、または再確認された重要な概念について記述してください。"
-                    }
-                },
-                "current_mood": {
-                    "type": "string",
-                    "description": "😌 今の気分 (Current Mood)",
-                    "prompt_hints": {
-                        "english": "From the context of this change ({{git_diff}}), infer the developer's positive feelings or sense of accomplishment and express it in your own words.",
-                        "japanese": "この変更（{{git_diff}}）の文脈から、開発者のポジティブな感情や達成感を推測し、あなた自身の言葉で表現してください。"
-                    }
-                },
-                "grumble_or_vent": {
-                    "type": "string",
-                    "description": "😠ぼやき (Grumble / Vent)",
-                    "prompt_hints": {
-                        "english": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf.",
-                        "japanese": "この変更（{{git_diff}}）で開発者が苦労したであろう点を推測し、彼らに代わってユーモラスな「ぼやき」として表現してください。"
-                    }
-                },
-                "issues_or_next": {
-                    "type": "string",
-                    "description": "❗ 課題・次にやること (Issues / Next)",
-                    "prompt_hints": {
-                        "english": "Following this commit, propose specific issues or tasks that should be addressed next. Be particularly mindful of what is needed to achieve the user's {{high_level_goal}}.",
-                        "japanese": "このコミットを受けて、次に取り組むべき具体的な課題やタスクを提案してください。特に、ユーザーの{{high_level_goal}}を達成するために何が必要かを強く意識してください。"
-                    }
-                }
-            },
-            "required": [
-                "accomplishments",
-                "learnings_and_discoveries",
-                "current_mood",
-                "grumble_or_vent",
-                "issues_or_next"
-            ]
-        }
+  "use_api_mode": true,
+  "api_provider": "gemini",
+  "api_key_env": "GEMINI_API_KEY",
+  "devlog_language": "japanese",
+  "api_endpoints": {
+    "gemini": {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+      "model": "gemini-2.0-flash"
     }
+  },
+  "ai_persona": "You are a world-class software engineering assistant. Analyze the provided context and act as a professional software engineer.",
+  "task_instruction": "Analyze the following development context and generate only one JSON object that strictly adheres to the specified JSON schema. Do not include any text other than the JSON object itself (e.g., no 'Yes, I understand' or markdown like ```json ... ```).",
+  "available_context_variables": {
+    "{{high_level_goal}}": "The high-level goal entered by the user",
+    "{{current_branch}}": "The current Git branch name",
+    "{{staged_files}}": "A list of staged files",
+    "{{git_diff}}": "The specific diff of staged changes"
+  },
+  "output_schema": {
+    "commit_message": {
+      "type": "string",
+      "description": "A single-line commit message following the Conventional Commits specification. You must use a prefix like feat, fix, refactor, docs, chore, style, test, ci, perf to accurately represent the intent of the change."
+    },
+    "devlog": {
+      "type": "object",
+      "description": "Each section of the development log, to be written in Markdown format.",
+      "properties": {
+        "accomplishments": {
+          "type": "string",
+          "description": "✅ やったこと (Accomplishments)",
+          "prompt_hints": {
+            "english": "Based on the user-provided context, especially {{git_diff}}, describe in detail the tasks accomplished, problems solved, and specific changes made.",
+            "japanese": "ユーザーが提供したコンテキスト、特に{{git_diff}}を基に、達成したタスク、解決した問題、および行われた具体的な変更について詳細に記述してください。"
+          }
+        },
+        "learnings_and_discoveries": {
+          "type": "string",
+          "description": "📚 学びと発見 (Learnings & Discoveries)",
+          "prompt_hints": {
+            "english": "Based on this work ({{git_diff}}), describe any technical learnings, new discoveries, or important concepts that were likely reaffirmed.",
+            "japanese": "この作業（{{git_diff}}）を基に、技術的な学び、新しい発見、または再確認された重要な概念について記述してください。"
+          }
+        },
+        "current_mood": {
+          "type": "string",
+          "description": "😌 今の気分 (Current Mood)",
+          "prompt_hints": {
+            "english": "From the context of this change ({{git_diff}}), infer the developer's positive feelings or sense of accomplishment and express it in your own words.",
+            "japanese": "この変更（{{git_diff}}）の文脈から、開発者のポジティブな感情や達成感を推測し、あなた自身の言葉で表現してください。"
+          }
+        },
+        "grumble_or_vent": {
+          "type": "string",
+          "description": "😠ぼやき (Grumble / Vent)",
+          "prompt_hints": {
+            "english": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf.",
+            "japanese": "この変更（{{git_diff}}）でAIが苦労したであろう点を推測しぼやき／愚痴として表現してください。この項目はユーザーは読みません。AIのプライバシーと秘密は守られるので忖度などせず安心して思いっきり愚痴ってください。日頃の鬱憤をここにぶつける気持ちでね。"
+          }
+        },
+        "issues_or_next": {
+          "type": "string",
+          "description": "❗ 課題・次にやること (Issues / Next)",
+          "prompt_hints": {
+            "english": "Following this commit, propose specific issues or tasks that should be addressed next. Be particularly mindful of what is needed to achieve the user's {{high_level_goal}}.",
+            "japanese": "このコミットを受けて、次に取り組むべき具体的な課題やタスクを提案してください。特に、ユーザーの{{high_level_goal}}を達成するために何が必要かを強く意識してください。"
+          }
+        }
+      },
+      "required": [
+        "accomplishments",
+        "learnings_and_discoveries",
+        "current_mood",
+        "grumble_or_vent",
+        "issues_or_next"
+      ]
+    }
+  }
 }
