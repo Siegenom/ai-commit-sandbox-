@@ -1,10 +1,6 @@
 ﻿<#
 .SYNOPSIS
     AI-assisted Git commit and devlog generation script for PowerShell.
-.DESCRIPTION
-    This script automates the process of creating a commit and a development log.
-    It gathers context from Git, generates a prompt for an AI, retrieves the AI's response,
-    and then performs the git commit and push operations.
 #>
 
 # --- Environment Setup ---
@@ -37,8 +33,7 @@ function Edit-TextInEditor {
         }
     }
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        Write-Error "編集に使用できるエディタが見つかりません。環境変数 EDITOR を設定してください。（例: code --wait）"
-        return $InitialContent
+        Write-Error "編集に使用できるエディタが見つかりません。"; return $InitialContent
     }
     $tempFile = New-TemporaryFile
     try {
@@ -66,9 +61,8 @@ if ($EnableAutoStaging) {
         if ($response -match '^[Yy]') {
             Write-Host "✅ すべての変更をステージングします..." -ForegroundColor Green
             git add .
-        }
-        else {
-            Write-Host "ℹ️ ステージングはスキップされました。現在ステージング済みの変更のみがコミット対象になります。" -ForegroundColor Yellow
+        } else {
+            Write-Host "ℹ️ ステージングはスキップされました。" -ForegroundColor Yellow
         }
     }
 }
@@ -91,10 +85,7 @@ try {
     if ($configContent -and $configContent.StartsWith([char]0xFEFF)) {
         $configContent = $configContent.Substring(1)
     }
-    if ([string]::IsNullOrWhiteSpace($configContent)) {
-        throw "設定ファイルが空です。"
-    }
-    $config = $configContent | ConvertFrom-Json -ErrorAction Stop
+    $config = $configContent | ConvertFrom-Json
 }
 catch {
     Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red
@@ -102,9 +93,30 @@ catch {
     exit 1
 }
 
+# [MODIFIED] Add language instruction to the main task instruction.
+$langInstruction = ""
+if ($config.devlog_language -eq 'japanese') {
+    $langInstruction = "The entire 'devlog' object must be written in Japanese."
+} else {
+    $langInstruction = "The entire 'devlog' object must be written in English."
+}
+$fullTaskInstruction = "$($config.task_instruction) $langInstruction"
+
+
 $inputJson = [PSCustomObject]@{
-    system_prompt = @{ persona = $config.ai_persona; task = $config.task_instruction; output_schema_definition = $config.output_schema }
-    user_context  = @{ high_level_goal = $highLevelGoal; git_context = @{ current_branch = $currentBranch; staged_files = $stagedFiles; diff = $gitDiff } }
+    system_prompt = @{ 
+        persona = $config.ai_persona
+        task = $fullTaskInstruction
+        output_schema_definition = $config.output_schema 
+    }
+    user_context  = @{ 
+        high_level_goal = $highLevelGoal
+        git_context = @{ 
+            current_branch = $currentBranch
+            staged_files = $stagedFiles
+            diff = $gitDiff 
+        } 
+    }
 }
 $aiPrompt = $inputJson | ConvertTo-Json -Depth 10
 
@@ -148,7 +160,7 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
 
 Write-Host "🔄 AIのJSON応答をパースしています..."
 try {
-    $aiJson = $aiResponse | ConvertFrom-Json -ErrorAction Stop
+    $aiJson = $aiResponse | ConvertFrom-Json
     $commitMsg = $aiJson.commit_message.Trim()
     $devlog = $aiJson.devlog
 
@@ -164,13 +176,13 @@ try {
     $logContent = ($logContentParts -join [System.Environment]::NewLine).Trim()
 }
 catch {
-    Write-Host "❌ AIの応答のパースに失敗しました。クリップボードの内容が有効なJSONであることを確認してください。" -ForegroundColor Red
+    Write-Host "❌ AIの応答のパースに失敗しました。" -ForegroundColor Red
     Write-Host "--- エラー詳細 ---"; Write-Host $_.Exception.Message
     exit 1
 }
 
-if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent) -or $null -eq $devlog) {
-    Write-Host "❌ AIの応答に必要なキー（commit_message, devlog）が含まれていないか、内容が空です。" -ForegroundColor Red
+if ([string]::IsNullOrEmpty($commitMsg) -or [string]::IsNullOrEmpty($logContent)) {
+    Write-Host "❌ AIの応答に必要なキーが含まれていないか、内容が空です。" -ForegroundColor Red
     exit 1
 }
 
@@ -195,7 +207,6 @@ if ($editResponse -match '^[Ee]') {
 }
 
 if (-not (Test-Path -Path $LogDir -PathType Container)) {
-    Write-Host "ℹ️ ログディレクトリが存在しないため作成します: $LogDir" -ForegroundColor Yellow
     New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
 }
 

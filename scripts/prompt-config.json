@@ -2,6 +2,7 @@
     "use_api_mode": true,
     "api_provider": "gemini",
     "api_key_env": "GEMINI_API_KEY",
+    "devlog_language": "japanese",
     "api_endpoints": {
         "gemini": {
             "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
@@ -9,7 +10,7 @@
         }
     },
     "ai_persona": "You are a world-class software engineering assistant. Analyze the provided context and act as a professional software engineer.",
-    "task_instruction": "Analyze the following development context and generate only one JSON object that strictly adheres to the specified JSON schema. Do not include any text other than the JSON object itself (e.g., no 'Yes, I understand' or markdown like ```json ... ```). Your entire output must be in English.",
+    "task_instruction": "Analyze the following development context and generate only one JSON object that strictly adheres to the specified JSON schema. Do not include any text other than the JSON object itself (e.g., no 'Yes, I understand' or markdown like ```json ... ```).",
     "available_context_variables": {
         "{{high_level_goal}}": "The high-level goal entered by the user",
         "{{current_branch}}": "The current Git branch name",
@@ -27,27 +28,27 @@
             "properties": {
                 "accomplishments": {
                     "type": "string",
-                    "description": "✅ Accomplishments",
+                    "description": "✅ やったこと (Accomplishments)",
                     "prompt_hint": "Based on the user-provided context, especially {{git_diff}}, describe in detail the tasks accomplished, problems solved, and specific changes made."
                 },
                 "learnings_and_discoveries": {
                     "type": "string",
-                    "description": "📚 Learnings and Discoveries",
+                    "description": "📚 学びと発見 (Learnings & Discoveries)",
                     "prompt_hint": "Based on this work ({{git_diff}}), describe any technical learnings, new discoveries, or important concepts that were likely reaffirmed."
                 },
                 "current_mood": {
                     "type": "string",
-                    "description": "😌 Current Mood",
+                    "description": "😌 今の気分 (Current Mood)",
                     "prompt_hint": "From the context of this change ({{git_diff}}), infer the developer's positive feelings or sense of accomplishment and express it in your own words."
                 },
                 "grumble_or_vent": {
                     "type": "string",
-                    "description": "😠 Grumble or Vent",
+                    "description": "😠ぼやき (Grumble / Vent)",
                     "prompt_hint": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf."
                 },
                 "issues_or_next": {
                     "type": "string",
-                    "description": "❗ Issues or Next Steps",
+                    "description": "❗ 課題・次にやること (Issues / Next)",
                     "prompt_hint": "Following this commit, propose specific issues or tasks that should be addressed next. Be particularly mindful of what is needed to achieve the user's {{high_level_goal}}."
                 }
             },
