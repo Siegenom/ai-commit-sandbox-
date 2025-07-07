@@ -1,0 +1,232 @@
+[2025-07-07 19:58:34.071] --- LOGGER INITIALIZED ---
+[2025-07-07 19:58:34.078] --- commit-ai.ps1 STARTED ---
+[2025-07-07 19:58:34.085] PSVersion: 7.5.2
+[2025-07-07 19:58:34.092] Step 1: Configuration paths set.
+[2025-07-07 19:58:34.097] Step 2: Main logic started.
+[2025-07-07 19:58:34.103] Step 2a: Checking for unstaged changes.
+[2025-07-07 19:58:38.518]        - User chose to stage changes.
+[2025-07-07 19:58:38.568] Step 3: Collecting Git context.
+[2025-07-07 19:58:38.705]        - Git context collected successfully.
+[2025-07-07 19:58:38.706] Step 4: Setting high-level goal.
+[2025-07-07 19:58:38.714]        - High-level goal is hardcoded.
+[2025-07-07 19:58:38.719] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 19:58:38.728]        - Config file parsed successfully.
+[2025-07-07 19:58:38.732] Step 6: Building AI prompt JSON.
+[2025-07-07 19:58:38.740]        - AI prompt JSON built. Length: 29694
+[2025-07-07 19:58:38.744] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 19:58:38.751] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 19:58:38.759]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 19:58:38.766]        - Calling adapter script now...
+[2025-07-07 19:58:38.784]        - Adapter script finished. Response length: 0
+[2025-07-07 19:58:38.785] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:05:11.614] --- LOGGER INITIALIZED ---
+[2025-07-07 20:05:11.615] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:05:11.624] PSVersion: 7.5.2
+[2025-07-07 20:05:11.634] Step 1: Configuration paths set.
+[2025-07-07 20:05:11.642] Step 2: Main logic started.
+[2025-07-07 20:05:11.649] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:05:15.507]        - User chose to stage changes.
+[2025-07-07 20:05:15.552] Step 3: Collecting Git context.
+[2025-07-07 20:05:15.670]        - Git context collected successfully.
+[2025-07-07 20:05:15.671] Step 4: Setting high-level goal.
+[2025-07-07 20:05:15.679]        - High-level goal is hardcoded.
+[2025-07-07 20:05:15.686] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:05:15.694]        - Config file parsed successfully.
+[2025-07-07 20:05:15.700] Step 6: Building AI prompt JSON.
+[2025-07-07 20:05:15.708]        - AI prompt JSON built. Length: 32486
+[2025-07-07 20:05:15.715] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:05:15.722] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:05:15.729]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:05:15.740]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpvhniwf.tmp
+[2025-07-07 20:05:15.743]        - Calling adapter script now...
+[2025-07-07 20:05:15.756]        - Removed temporary prompt file.
+[2025-07-07 20:05:15.768] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:10:48.826] --- LOGGER INITIALIZED ---
+[2025-07-07 20:10:48.827] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:10:48.835] PSVersion: 7.5.2
+[2025-07-07 20:10:48.842] Step 1: Configuration paths set.
+[2025-07-07 20:10:48.849] Step 2: Main logic started.
+[2025-07-07 20:10:48.857] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:10:51.051]        - User chose to stage changes.
+[2025-07-07 20:10:51.094] Step 3: Collecting Git context.
+[2025-07-07 20:10:51.204]        - Git context collected successfully.
+[2025-07-07 20:10:51.205] Step 4: Setting high-level goal.
+[2025-07-07 20:10:51.213]        - High-level goal is hardcoded.
+[2025-07-07 20:10:51.220] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:10:51.228]        - Config file parsed successfully.
+[2025-07-07 20:10:51.235] Step 6: Building AI prompt JSON.
+[2025-07-07 20:10:51.243]        - AI prompt JSON built. Length: 34240
+[2025-07-07 20:10:51.252] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:10:51.260] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:10:51.268]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:10:51.277]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmplyppd2.tmp
+[2025-07-07 20:10:51.283]        - Calling adapter script now...
+[2025-07-07 20:10:51.294]        - Removed temporary prompt file.
+[2025-07-07 20:10:51.308] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:13:39.537] --- LOGGER INITIALIZED ---
+[2025-07-07 20:13:39.538] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:13:39.546] PSVersion: 7.5.2
+[2025-07-07 20:13:39.553] Step 1: Configuration paths set.
+[2025-07-07 20:13:39.559] Step 2: Main logic started.
+[2025-07-07 20:13:39.566] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:13:41.211]        - User chose to stage changes.
+[2025-07-07 20:13:41.254] Step 3: Collecting Git context.
+[2025-07-07 20:13:41.366]        - Git context collected successfully.
+[2025-07-07 20:13:41.367] Step 4: Setting high-level goal.
+[2025-07-07 20:13:41.376]        - High-level goal is hardcoded.
+[2025-07-07 20:13:41.383] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:13:41.392]        - Config file parsed successfully.
+[2025-07-07 20:13:41.398] Step 6: Building AI prompt JSON.
+[2025-07-07 20:13:41.406]        - AI prompt JSON built. Length: 36299
+[2025-07-07 20:13:41.414] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:13:41.421] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:13:41.429]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:13:41.437]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpabi0bw.tmp
+[2025-07-07 20:13:41.443]        - Calling adapter script now...
+[2025-07-07 20:13:41.455]        - Removed temporary prompt file.
+[2025-07-07 20:13:41.467] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:24:24.103] --- LOGGER INITIALIZED ---
+[2025-07-07 20:24:24.104] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:24:24.113] PSVersion: 7.5.2
+[2025-07-07 20:24:24.122] Step 1: Configuration paths set.
+[2025-07-07 20:24:24.130] Step 2: Main logic started.
+[2025-07-07 20:24:24.139] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:24:25.472]        - User chose to stage changes.
+[2025-07-07 20:24:25.520] Step 3: Collecting Git context.
+[2025-07-07 20:24:25.645]        - Git context collected successfully.
+[2025-07-07 20:24:25.646] Step 4: Setting high-level goal.
+[2025-07-07 20:24:25.660]        - High-level goal is hardcoded.
+[2025-07-07 20:24:25.671] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:24:25.686]        - Config file parsed successfully.
+[2025-07-07 20:24:25.697] Step 6: Building AI prompt JSON.
+[2025-07-07 20:24:25.708]        - AI prompt JSON built. Length: 37648
+[2025-07-07 20:24:25.718] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:24:25.727] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:24:25.736]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:24:25.753]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpniz3rf.tmp
+[2025-07-07 20:24:25.761]        - Calling adapter script now...
+[2025-07-07 20:24:25.774]        - Removed temporary prompt file.
+[2025-07-07 20:24:25.804] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:25:13.490] --- LOGGER INITIALIZED ---
+[2025-07-07 20:25:13.491] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:25:13.499] PSVersion: 7.5.2
+[2025-07-07 20:25:13.506] Step 1: Configuration paths set.
+[2025-07-07 20:25:13.512] Step 2: Main logic started.
+[2025-07-07 20:25:13.521] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:25:15.012]        - User chose to stage changes.
+[2025-07-07 20:25:15.055] Step 3: Collecting Git context.
+[2025-07-07 20:25:15.171]        - Git context collected successfully.
+[2025-07-07 20:25:15.172] Step 4: Setting high-level goal.
+[2025-07-07 20:25:15.181]        - High-level goal is hardcoded.
+[2025-07-07 20:25:15.189] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:25:15.201]        - Config file parsed successfully.
+[2025-07-07 20:25:15.209] Step 6: Building AI prompt JSON.
+[2025-07-07 20:25:15.220]        - AI prompt JSON built. Length: 39351
+[2025-07-07 20:25:15.229] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:25:15.241] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:25:15.253]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:25:15.265]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpol0gjb.tmp
+[2025-07-07 20:25:15.274]        - Calling adapter script now...
+[2025-07-07 20:25:15.288]        - Removed temporary prompt file.
+[2025-07-07 20:25:15.304] ERROR: AI response is empty. Aborting.
+[2025-07-07 20:57:53.300] --- LOGGER INITIALIZED ---
+[2025-07-07 20:57:53.301] --- commit-ai.ps1 STARTED ---
+[2025-07-07 20:57:53.309] PSVersion: 7.5.2
+[2025-07-07 20:57:53.317] Step 1: Configuration paths set.
+[2025-07-07 20:57:53.324] Step 2: Main logic started.
+[2025-07-07 20:57:53.332] Step 2a: Checking for unstaged changes.
+[2025-07-07 20:57:55.277]        - User chose to stage changes.
+[2025-07-07 20:57:55.320] Step 3: Collecting Git context.
+[2025-07-07 20:57:55.433]        - Git context collected successfully.
+[2025-07-07 20:57:55.434] Step 4: Setting high-level goal.
+[2025-07-07 20:57:55.443]        - High-level goal is hardcoded.
+[2025-07-07 20:57:55.449] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 20:57:55.458]        - Config file parsed successfully.
+[2025-07-07 20:57:55.465] Step 6: Building AI prompt JSON.
+[2025-07-07 20:57:55.473]        - AI prompt JSON built. Length: 41339
+[2025-07-07 20:57:55.480] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 20:57:55.489] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 20:57:55.497]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 20:57:55.506]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpp5gky4.tmp
+[2025-07-07 20:57:55.512]        - Calling adapter script now...
+[2025-07-07 20:57:55.523]        - Removed temporary prompt file.
+[2025-07-07 20:57:55.540] ERROR: AI response is empty. Aborting.
+[2025-07-07 21:03:32.475] --- LOGGER INITIALIZED ---
+[2025-07-07 21:03:32.475] --- commit-ai.ps1 STARTED ---
+[2025-07-07 21:03:32.484] PSVersion: 7.5.2
+[2025-07-07 21:03:32.492] Step 1: Configuration paths set.
+[2025-07-07 21:03:32.498] Step 2: Main logic started.
+[2025-07-07 21:03:32.507] Step 2a: Checking for unstaged changes.
+[2025-07-07 21:03:34.117]        - User chose to stage changes.
+[2025-07-07 21:03:34.151] Step 3: Collecting Git context.
+[2025-07-07 21:03:34.257]        - Git context collected successfully.
+[2025-07-07 21:03:34.257] Step 4: Setting high-level goal.
+[2025-07-07 21:03:34.267]        - High-level goal is hardcoded.
+[2025-07-07 21:03:34.274] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 21:03:34.283]        - Config file parsed successfully.
+[2025-07-07 21:03:34.290] Step 6: Building AI prompt JSON.
+[2025-07-07 21:03:34.299]        - AI prompt JSON built. Length: 43043
+[2025-07-07 21:03:34.306] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 21:03:34.314] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 21:03:34.322]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 21:03:34.332]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpmbvub5.tmp
+[2025-07-07 21:03:34.337]        - Calling adapter script now...
+[2025-07-07 21:03:34.351]        - Removed temporary prompt file.
+[2025-07-07 21:03:34.360] ERROR: AI response is empty. Aborting.
+[2025-07-07 21:07:48.851] --- LOGGER INITIALIZED ---
+[2025-07-07 21:07:48.852] --- commit-ai.ps1 STARTED ---
+[2025-07-07 21:07:48.860] PSVersion: 7.5.2
+[2025-07-07 21:07:48.867] Step 1: Configuration paths set.
+[2025-07-07 21:07:48.874] Step 2: Main logic started.
+[2025-07-07 21:07:48.881] Step 2a: Checking for unstaged changes.
+[2025-07-07 21:07:50.093]        - User chose to stage changes.
+[2025-07-07 21:07:50.138] Step 3: Collecting Git context.
+[2025-07-07 21:07:50.262]        - Git context collected successfully.
+[2025-07-07 21:07:50.263] Step 4: Setting high-level goal.
+[2025-07-07 21:07:50.273]        - High-level goal is hardcoded.
+[2025-07-07 21:07:50.280] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 21:07:50.289]        - Config file parsed successfully.
+[2025-07-07 21:07:50.296] Step 6: Building AI prompt JSON.
+[2025-07-07 21:07:50.305]        - AI prompt JSON built. Length: 44745
+[2025-07-07 21:07:50.312] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 21:07:50.320] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 21:07:50.328]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 21:07:50.337]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpvzzgis.tmp
+[2025-07-07 21:07:50.342]        - Calling adapter script now...
+[2025-07-07 21:07:50.354]        - Removed temporary prompt file.
+[2025-07-07 21:07:50.366] ERROR: AI response is empty. Aborting.
+[2025-07-07 21:08:22.575] --- LOGGER INITIALIZED ---
+[2025-07-07 21:08:22.575] --- commit-ai.ps1 STARTED ---
+[2025-07-07 21:08:22.584] PSVersion: 7.5.2
+[2025-07-07 21:08:22.591] Step 1: Configuration paths set.
+[2025-07-07 21:08:22.599] Step 2: Main logic started.
+[2025-07-07 21:08:22.608] Step 2a: Checking for unstaged changes.
+[2025-07-07 21:08:23.864]        - User chose to stage changes.
+[2025-07-07 21:08:23.912] Step 3: Collecting Git context.
+[2025-07-07 21:08:24.032]        - Git context collected successfully.
+[2025-07-07 21:08:24.033] Step 4: Setting high-level goal.
+[2025-07-07 21:08:24.042]        - High-level goal is hardcoded.
+[2025-07-07 21:08:24.049] Step 5: Reading and parsing config file: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\prompt-config.json
+[2025-07-07 21:08:24.057]        - Config file parsed successfully.
+[2025-07-07 21:08:24.063] Step 6: Building AI prompt JSON.
+[2025-07-07 21:08:24.071]        - AI prompt JSON built. Length: 46447
+[2025-07-07 21:08:24.078] Step 7: Entering API/Manual mode decision block.
+[2025-07-07 21:08:24.086] Step 7a: API mode is ON. Provider: gemini
+[2025-07-07 21:08:24.094]        - Adapter path: C:\Users\nitro\Documents\my_build\ai-commit-sandbox-\scripts\api_adapters\invoke-gemini-api.ps1
+[2025-07-07 21:08:24.103]        - Saved AI prompt to temporary file: C:\Users\nitro\AppData\Local\Temp\tmpjuxbn5.tmp
+[2025-07-07 21:08:24.108]        - Calling adapter script now...
+[2025-07-07 21:08:24.136] --- LOGGER INITIALIZED ---
+[2025-07-07 21:08:24.137] --- invoke-gemini-api.ps1 (Here-String Version) STARTED ---
+[2025-07-07 21:08:24.146] Step A1: Successfully read prompt from file. Length: 46449
+[2025-07-07 21:08:24.156] Step A2: API Key Found.
+[2025-07-07 21:08:24.160] Step A3: Incoming AiPrompt JSON parsed successfully.
+[2025-07-07 21:08:24.167] Step A4: Building request body using Here-Strings for robustness.
+[2025-07-07 21:08:24.179]          - Request body built. Length: 482
+[2025-07-07 21:08:24.184] Step A5: Calling Gemini API.
+[2025-07-07 21:08:24.193]          - URL: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyCmG74oEA4i7_dXkVwngzNVpD2v2lnhKfw
+[2025-07-07 21:08:27.310]          - API call successful.
+[2025-07-07 21:08:27.311] Step A6: Processing API response.
+[2025-07-07 21:08:27.322]          - Successfully extracted and cleaned text. Returning to caller.
+[2025-07-07 21:08:27.328]        - Adapter script finished. Response length: 1740
+[2025-07-07 21:08:27.337]        - Removed temporary prompt file.
+[2025-07-07 21:08:27.343] Step 8: Parsing AI response.
