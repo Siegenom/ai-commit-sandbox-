@@ -37,15 +37,17 @@ function Edit-TextInEditor {
 
     # 2. If not set, fallback to OS defaults
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        if ($PSVersionTable.Platform -eq 'Win32NT') {
+        # Use the fundamental $env:OS for Windows detection for maximum compatibility.
+        if ($env:OS -eq 'Windows_NT') {
             $editorCommand = "notepad.exe"
         }
-        elseif ($PSVersionTable.Platform -eq 'Unix') {
-            # Differentiate between macOS and Linux. 'open' command is a strong indicator of macOS.
+        # For Unix-like systems, use the more modern $PSVersionTable, but handle older versions.
+        elseif ($PSVersionTable.Platform -eq 'MacOS' -or $PSVersionTable.Platform -eq 'Unix') {
             if (Get-Command open -ErrorAction SilentlyContinue) {
+                # 'open -t' opens with the default text editor and '-W' waits for it to close.
                 $editorCommand = "open -W -t"
             }
-            else { # Assume Linux otherwise
+            else { # Assume Linux if 'open' is not available
                 $editors = @("code --wait", "nano", "vim", "vi")
                 $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
             }
@@ -106,7 +108,7 @@ Write-Host "🔍 Gitから情報を収集中..."
 $gitDiff = (git diff --staged | Out-String).Trim()
 
 if ([string]::IsNullOrEmpty($gitDiff)) {
-    Write-Host "⚠️ ステージングされた変更がありません。'git add'でコミットしたい変更をステージングしてください。" -ForegroundColor Red
+    Write-Host '⚠️ ステージングされた変更がありません。''git add''でコミットしたい変更をステージングしてください。' -ForegroundColor Red
     exit 1
 }
 
@@ -119,17 +121,35 @@ $highLevelGoal = Read-Host
 
 # 3. AIへの入力JSONを生成
 Write-Host "📝 設定ファイルとコンテキストからAIへの入力JSONを生成中..."
-if (-not (Test-Path $ConfigFile)) {
-    Write-Host "❌ 設定ファイルが見つかりません: $ConfigFile" -ForegroundColor Red
+try {
+    # [FIX] Read the file as a byte stream and convert to a UTF-8 string to prevent encoding issues.
+    # This is more robust than relying on Get-Content -Encoding.
+    $configBytes = Get-Content $ConfigFile -AsByteStream -Raw
+    $configContent = [System.Text.Encoding]::UTF8.GetString($configBytes)
+
+    # Remove UTF-8 BOM if present, although the byte stream method should handle it.
+    if ($configContent -and $configContent.StartsWith([char]0xFEFF)) {
+        $configContent = $configContent.Substring(1)
+    }
+    if ([string]::IsNullOrWhiteSpace($configContent)) {
+        throw "設定ファイル '$ConfigFile' が空か、空白文字のみで構成されています。"
+    }
+    $config = $configContent | ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red
+    Write-Host "--- エラー詳細 ---" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message
+    Write-Host "--------------------"
+    Write-Host "ファイルが有効なJSON形式であり、BOMなしのUTF-8エンコーディングで保存されていることを確認してください。" -ForegroundColor Yellow
     exit 1
 }
-$config = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
 # 入力用JSONオブジェクトを構築
 $inputJson = [PSCustomObject]@{
     system_prompt = [PSCustomObject]@{
-        persona                  = $config.ai_persona
-        task                     = $config.task_instruction
+        persona                 = $config.ai_persona
+        task                    = $config.task_instruction
         output_schema_definition = $config.output_schema
     }
     user_context  = [PSCustomObject]@{
@@ -145,15 +165,59 @@ $inputJson = [PSCustomObject]@{
 # JSONに変換
 $aiPrompt = $inputJson | ConvertTo-Json -Depth 10
 
-# 4. ユーザーにプロンプトを提示し、AIの回答を待つ
-Set-Clipboard -Value $aiPrompt
-Write-Host "✅ AIへの指示プロンプトを生成し、クリップボードにコピーしました。" -ForegroundColor Green
-Write-Host "---"
-Write-Host "（プロンプトはクリップボードにコピー済みです。AIチャットに貼り付けてください）"
-Write-Host "---"
-Read-Host "👆 AIが生成したJSONオブジェクトをクリップボードにコピーしてから、このウィンドウでEnterキーを押してください"
+# 4. AIとの対話 (APIモード or 手動モード)
+$aiResponse = ""
+if ($config.use_api_mode) {
+    # --- APIモード ---
+    Write-Host "🤖 APIを呼び出しています... ($($config.api_provider))" -ForegroundColor Cyan
 
-$aiResponse = Get-Clipboard
+    $adaptersDir = Join-Path -Path $PSScriptRoot -ChildPath "api_adapters"
+    if (-not (Test-Path $adaptersDir -PathType Container)) {
+        Write-Host "❌ APIアダプターのディレクトリが見つかりません！" -ForegroundColor Red
+        Write-Host "👉 'scripts' フォルダ内に 'api_adapters' という名前のフォルダを作成してください。" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $adapterPath = Join-Path -Path $adaptersDir -ChildPath "invoke-$($config.api_provider)-api.ps1"
+    if (-not (Test-Path $adapterPath)) {
+        Write-Host "❌ APIアダプターのファイルが見つかりません！" -ForegroundColor Red
+        Write-Host "👉 'scripts\api_adapters' フォルダ内に 'invoke-$($config.api_provider)-api.ps1' という名前のファイルを作成してください。" -ForegroundColor Yellow
+        $actualFiles = Get-ChildItem -Path $adaptersDir | Select-Object -ExpandProperty Name
+        if ($actualFiles) {
+            Write-Host "ℹ️ 'api_adapters' フォルダ内の現在のファイル:" -ForegroundColor Gray
+            $actualFiles | ForEach-Object { Write-Host "- $_" -ForegroundColor Gray }
+        } else {
+            Write-Host "ℹ️ 'api_adapters' フォルダは現在空です。" -ForegroundColor Gray
+        }
+        exit 1
+    }
+
+    # APIアダプターを実行し、応答を取得
+    $aiResponse = & $adapterPath -AiPrompt $aiPrompt -ApiConfig $config
+
+    # アダプターからのエラーをチェック
+    if ($aiResponse -like "ERROR:*") {
+        Write-Host "❌ API処理中にエラーが発生しました。手動モードに切り替えるか、設定を確認してください。" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "✅ APIから応答を取得しました。" -ForegroundColor Green
+
+} else {
+    # --- 手動モード ---
+    Set-Clipboard -Value $aiPrompt
+    Write-Host "✅ AIへの指示プロンプトを生成し、クリップボードにコピーしました。" -ForegroundColor Green
+    Write-Host "---"
+    Write-Host "（プロンプトはクリップボードにコピー済みです。AIチャットに貼り付けてください）"
+    Write-Host "---"
+    Read-Host "👆 AIが生成したJSONオブジェクトをクリップボードにコピーしてから、このウィンドウでEnterキーを押してください"
+
+    $aiResponse = Get-Clipboard
+}
+
+if ([string]::IsNullOrWhiteSpace($aiResponse)) {
+    Write-Host "❌ AIからの応答が空です。処理を中断します。" -ForegroundColor Red
+    exit 1
+}
 
 # 5. AIのJSON応答をパースする
 Write-Host "🔄 AIのJSON応答をパースしています..."
@@ -202,8 +266,8 @@ Write-Host "---"
 Write-Host $logContent
 Write-Host "---" -ForegroundColor DarkGray
 
-$editResponse = Read-Host "👉 この内容でコミットしますか？ 手動で編集する場合は 'e' を入力してください (Y/n/e)"
-if ($editResponse -match '^[Ee]') {
+$editResponse = Read-Host '👉 この内容でコミットしますか？ 手動で編集する場合は ''e'' を入力してください (Y/n/e)'
+if ($editResponse -match '^[Ee]') { # 'e'が入力された場合
     # 手動編集フロー
     $newCommitMsg = Read-Host "✏️ 新しいコミットメッセージを入力してください (Enterのみで現在の値を維持)"
     if (-not [string]::IsNullOrWhiteSpace($newCommitMsg)) {
@@ -213,7 +277,7 @@ if ($editResponse -match '^[Ee]') {
     $logContent = Edit-TextInEditor -InitialContent $logContent
     Write-Host "✅ 編集内容を反映しました。"
 
-} elseif ($editResponse -match '^[Nn]') {
+} elseif ($editResponse -notmatch '^[Yy]?$') { # Y, y, または空文字列(Enterのみ)でない場合
     Write-Host "❌ 処理を中断しました。" -ForegroundColor Red
     exit 0
 }
@@ -231,7 +295,9 @@ Set-Content -Path $LogFile -Value $logContent -Encoding UTF8
 git add $LogFile
 
 Write-Host "💬 コミットを実行します (Message: $commitMsg)" -ForegroundColor Cyan
-git commit -m $commitMsg
+# [FIXED] AIの応答に " が含まれていてもエラーにならないようにエスケープ処理を追加
+$escapedCommitMsg = $commitMsg -replace '"', '`"'
+git commit -m "$escapedCommitMsg"
  
 $pushResponse = Read-Host "🚀 リモートリポジトリにプッシュしますか？ (y/n)"
 if ($pushResponse -match '^[Yy]') {

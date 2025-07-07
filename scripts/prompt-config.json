@@ -1,54 +1,63 @@
 ﻿{
-    "ai_persona":  "あなたは世界クラスのソフトウェアエンジニアリングアシスタントです。提供されたコンテキストを分析し、プロのソフトウェアエンジニアとして振る舞ってください。",
-    "task_instruction":  "以下の開発コンテキストを分析し、指定されたJSONスキーマに厳密に従ったJSONオブジェクトを一つだけ生成してください。JSON以外のテキスト（例: 「はい、承知しました」や```json ... ```のようなマークダウン）は一切含めないでください。",
-    "available_context_variables": {
-        "{{high_level_goal}}": "ユーザーが入力した高レベルの目標",
-        "{{current_branch}}": "現在のGitブランチ名",
-        "{{staged_files}}": "ステージングされたファイルの一覧",
-        "{{git_diff}}": "ステージングされた変更の具体的な差分"
+    "use_api_mode": true,
+    "api_provider": "gemini",
+    "api_key_env": "GEMINI_API_KEY",
+    "api_endpoints": {
+        "gemini": {
+            "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+            "model": "gemini-1.5-flash-latest"
+        }
     },
-    "output_schema":  {
-                          "commit_message":  {
-                                                 "type":  "string",
-                                                 "description":  "Conventional Commits規約に従った1行のコミットメッセージ。変更の意図を的確に表現するプレフィックス(feat, fix, refactor, docs, chore, style, test, ci, perf)を必ず使用してください。"
-                                             },
-                          "devlog":  {
-                                         "type":  "object",
-                                         "description":  "Markdown形式で記述される開発日誌の各セクション。",
-                                         "properties":  {
-                                                            "accomplishments":  {
-                                                                                    "type":  "string",
-                                                                                    "description":  "✅ やったこと",
-                                                                                    "prompt_hint":  "ユーザーが提供したコンテキスト、特に {{git_diff}} を基に、達成したタスク、解決した問題、具体的な変更点を詳細に記述してください。"
-                                                                                },
-                                                            "learnings_and_discoveries":  {
-                                                                                              "type":  "string",
-                                                                                              "description":  "📚 学びと発見",
-                                                                                              "prompt_hint":  "この作業（{{git_diff}}）から得られたであろう、技術的な学び、新しい発見、あるいは再確認した重要な概念を推測して記述してください。"
-                                                                                          },
-                                                            "current_mood":  {
-                                                                                 "type":  "string",
-                                                                                 "description":  "😌 今の気分",
-                                                                                 "prompt_hint":  "この変更作業のコンテキスト（{{git_diff}}）から、開発者のポジティブな感情や達成感を推測し、AI自身の言葉として表現してください。"
-                                                                             },
-                                                            "grumble_or_vent":  {
-                                                                                    "type":  "string",
-                                                                                    "description":  "😠ぼやき",
-                                                                                    "prompt_hint":  "この変更作業（{{git_diff}}）で開発者が苦労したであろう点を推測し、ユーモアを交えた「ぼやき」として代弁してください。"
-                                                                                },
-                                                            "issues_or_next":  {
-                                                                                   "type":  "string",
-                                                                                   "description":  "❗ 課題・次にやること",
-                                                                                   "prompt_hint":  "このコミットを受けて、次に取り組むべき具体的な課題やタスクを提案してください。特に、ユーザーが入力した {{high_level_goal}} を達成するために何が必要かを強く意識してください。"
-                                                                               }
-                                                        },
-                                         "required":  [
-                                                          "accomplishments",
-                                                          "learnings_and_discoveries",
-                                                          "current_mood",
-                                                          "grumble_or_vent",
-                                                          "issues_or_next"
-                                                      ]
-                                     }
-                      }
+    "ai_persona": "You are a world-class software engineering assistant. Analyze the provided context and act as a professional software engineer.",
+    "task_instruction": "Analyze the following development context and generate only one JSON object that strictly adheres to the specified JSON schema. Do not include any text other than the JSON object itself (e.g., no 'Yes, I understand' or markdown like ```json ... ```). Your entire output must be in English.",
+    "available_context_variables": {
+        "{{high_level_goal}}": "The high-level goal entered by the user",
+        "{{current_branch}}": "The current Git branch name",
+        "{{staged_files}}": "A list of staged files",
+        "{{git_diff}}": "The specific diff of staged changes"
+    },
+    "output_schema": {
+        "commit_message": {
+            "type": "string",
+            "description": "A single-line commit message following the Conventional Commits specification. You must use a prefix like feat, fix, refactor, docs, chore, style, test, ci, perf to accurately represent the intent of the change."
+        },
+        "devlog": {
+            "type": "object",
+            "description": "Each section of the development log, to be written in Markdown format.",
+            "properties": {
+                "accomplishments": {
+                    "type": "string",
+                    "description": "✅ Accomplishments",
+                    "prompt_hint": "Based on the user-provided context, especially {{git_diff}}, describe in detail the tasks accomplished, problems solved, and specific changes made."
+                },
+                "learnings_and_discoveries": {
+                    "type": "string",
+                    "description": "📚 Learnings and Discoveries",
+                    "prompt_hint": "Based on this work ({{git_diff}}), describe any technical learnings, new discoveries, or important concepts that were likely reaffirmed."
+                },
+                "current_mood": {
+                    "type": "string",
+                    "description": "😌 Current Mood",
+                    "prompt_hint": "From the context of this change ({{git_diff}}), infer the developer's positive feelings or sense of accomplishment and express it in your own words."
+                },
+                "grumble_or_vent": {
+                    "type": "string",
+                    "description": "😠 Grumble or Vent",
+                    "prompt_hint": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf."
+                },
+                "issues_or_next": {
+                    "type": "string",
+                    "description": "❗ Issues or Next Steps",
+                    "prompt_hint": "Following this commit, propose specific issues or tasks that should be addressed next. Be particularly mindful of what is needed to achieve the user's {{high_level_goal}}."
+                }
+            },
+            "required": [
+                "accomplishments",
+                "learnings_and_discoveries",
+                "current_mood",
+                "grumble_or_vent",
+                "issues_or_next"
+            ]
+        }
+    }
 }

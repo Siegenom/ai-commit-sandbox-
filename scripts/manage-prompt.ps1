@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Interactively manage the AI prompt configuration file (prompt-config.json), including its structure.
 .DESCRIPTION
@@ -14,11 +14,26 @@
 $PSScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
 $ConfigFile = Join-Path -Path $PSScriptRoot -ChildPath "prompt-config.json"
 
-if (-not (Test-Path $ConfigFile)) {
-    Write-Host "❌ 設定ファイルが見つかりません: $ConfigFile" -ForegroundColor Red
+try {
+    $configContent = Get-Content $ConfigFile -Raw -Encoding UTF8
+    # Remove UTF-8 BOM if present, as it can cause issues with ConvertFrom-Json
+    $utf8Bom = [System.Text.Encoding]::UTF8.GetString([System.Text.Encoding]::UTF8.GetPreamble())
+    if ($configContent.StartsWith($utf8Bom)) {
+        $configContent = $configContent.Substring($utf8Bom.Length)
+    }
+    if ([string]::IsNullOrWhiteSpace($configContent)) {
+        throw "設定ファイル '$ConfigFile' が空か、空白文字のみで構成されています。"
+    }
+    $config = $configContent | ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red
+    Write-Host "--- エラー詳細 ---" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message
+    Write-Host "--------------------"
+    Write-Host "ファイルが有効なJSON形式であり、BOMなしのUTF-8エンコーディングで保存されていることを確認してください。" -ForegroundColor Yellow
     exit 1
 }
-$config = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
 
 # --- Functions ---
 function Edit-TextInEditor {
@@ -33,15 +48,17 @@ function Edit-TextInEditor {
 
     # 2. If not set, fallback to OS defaults
     if ([string]::IsNullOrEmpty($editorCommand)) {
-        if ($PSVersionTable.Platform -eq 'Win32NT') {
+        # Use the fundamental $env:OS for Windows detection for maximum compatibility.
+        if ($env:OS -eq 'Windows_NT') {
             $editorCommand = "notepad.exe"
         }
-        elseif ($PSVersionTable.Platform -eq 'Unix') {
-            # Differentiate between macOS and Linux. 'open' command is a strong indicator of macOS.
+        # For Unix-like systems, use the more modern $PSVersionTable, but handle older versions.
+        elseif ($PSVersionTable.Platform -eq 'MacOS' -or $PSVersionTable.Platform -eq 'Unix') {
             if (Get-Command open -ErrorAction SilentlyContinue) {
+                # 'open -t' opens with the default text editor and '-W' waits for it to close.
                 $editorCommand = "open -W -t"
             }
-            else { # Assume Linux otherwise
+            else { # Assume Linux if 'open' is not available
                 $editors = @("code --wait", "nano", "vim", "vi")
                 $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
             }
@@ -229,18 +246,41 @@ function Manage-DiaryItems {
     }
 }
 
+function Manage-ApiSettings {
+    param($config)
+    while ($true) {
+        Write-Host "`n--- API設定の編集 ---" -ForegroundColor Green
+        $currentMode = if ($config.use_api_mode) { "APIモード (自動)" } else { "手動モード" }
+        Write-Host "現在のモード: $currentMode" -ForegroundColor Yellow
+        Write-Host "[1] モードを切り替える"
+        Write-Host "[b] メインメニューに戻る"
+        $choice = Read-Host "👉 選択してください"
+        switch ($choice) {
+            '1' {
+                $config.use_api_mode = -not $config.use_api_mode
+                $newMode = if ($config.use_api_mode) { "APIモード (自動)" } else { "手動モード" }
+                Write-Host "✅ モードを '$newMode' に切り替えました。"
+            }
+            'b' { return }
+            default { Write-Host "❌ 無効な選択です。" -ForegroundColor Red }
+        }
+    }
+}
+
 # --- Main Logic ---
 while ($true) {
     Write-Host "`n🤖 AIプロンプト設定マネージャー" -ForegroundColor Cyan
     Write-Host "何をしますか？"
     Write-Host "[1] ペルソナと基本指示を編集する"
     Write-Host "[2] 日誌の項目を編集する"
+    Write-Host "[3] API設定を編集する"
     Write-Host "[q] 保存して終了する"
     $menuChoice = Read-Host "👉 選択してください"
 
     switch ($menuChoice) {
         '1' { Manage-PersonaAndInstructions -config $config }
         '2' { Manage-DiaryItems -config $config }
+        '3' { Manage-ApiSettings -config $config }
         'q' {
             $config | ConvertTo-Json -Depth 10 | Set-Content -Path $ConfigFile -Encoding UTF8
             Write-Host "✅ 設定を保存しました: $ConfigFile" -ForegroundColor Green
