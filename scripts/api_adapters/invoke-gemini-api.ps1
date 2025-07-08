@@ -24,22 +24,37 @@ try {
     # --- JSON PARSING ---
     $promptObject = $AiPrompt | ConvertFrom-Json
 
-    # --- [NEW] CONTEXT VALIDATION ---
-    # Verify that the context passed from the main script is not empty.
+    # --- CONTEXT VALIDATION ---
     if ([string]::IsNullOrWhiteSpace($promptObject.user_context.high_level_goal)) {
-        throw "Validation Error: The 'high_level_goal' from the prompt file is empty. The main script may not be providing the user's goal."
+        throw "Validation Error: The 'high_level_goal' from the prompt file is empty."
     }
     if ([string]::IsNullOrWhiteSpace($promptObject.user_context.git_context.diff)) {
-        throw "Validation Error: The 'git_diff' from the prompt file is empty. The main script may not be providing the Git context."
+        throw "Validation Error: The 'git_diff' from the prompt file is empty."
     }
 
     # --- REQUEST BODY CONSTRUCTION ---
     
-    # Part 1: System Instruction
-    $schemaJson = $promptObject.system_prompt.output_schema_definition | ConvertTo-Json -Depth 10 -Compress
+    # Part 1: System Instruction (with token reduction)
     
-    # Use a literal here-string (@'...'@) as a template for robustness.
-    # This prevents the PowerShell parser from misinterpreting characters within the variables.
+    # Create a lightweight copy of the schema to avoid modifying the original object.
+    $lightweightSchema = $promptObject.system_prompt.output_schema_definition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+
+    # Remove descriptive keys from the schema to reduce token count.
+    if ($null -ne $lightweightSchema.devlog.properties) {
+        foreach ($propKey in $lightweightSchema.devlog.properties.PSObject.Properties.Name) {
+            $null = $lightweightSchema.devlog.properties.$propKey.PSObject.Properties.Remove('description')
+            $null = $lightweightSchema.devlog.properties.$propKey.PSObject.Properties.Remove('prompt_hints')
+        }
+    }
+    if ($null -ne $lightweightSchema.devlog) {
+        $null = $lightweightSchema.devlog.PSObject.Properties.Remove('description')
+    }
+    if ($null -ne $lightweightSchema.commit_message) {
+        $null = $lightweightSchema.commit_message.PSObject.Properties.Remove('description')
+    }
+    
+    $schemaJson = $lightweightSchema | ConvertTo-Json -Depth 20 -Compress
+    
     $systemInstructionTemplate = @'
 {0}
 
@@ -85,7 +100,7 @@ try {
         contents = @( $userContentPayload )
     }
     
-    $requestBody = $finalPayload | ConvertTo-Json -Depth 10
+    $requestBody = $finalPayload | ConvertTo-Json -Depth 20
     
     # --- API CALL ---
     $apiUrlTemplate = '{0}?key={1}'
@@ -106,6 +121,5 @@ try {
     }
 } catch {
     $errorMessage = "FATAL ERROR in invoke-gemini-api.ps1: $($_.Exception.Message)"
-    # Return a formatted error string that the calling script can reliably check.
     return "ERROR: $errorMessage"
 }

@@ -78,20 +78,17 @@ function Select-DiaryProperty {
     param([Parameter(Mandatory=$true)]$config, [Parameter(Mandatory=$true)][string]$PromptMessage)
     $propertyItems = @()
     $i = 1
-    # Check if properties exist before trying to access them
     if ($null -ne $config.output_schema.devlog.properties) {
         foreach ($propName in $config.output_schema.devlog.required) {
             $propertyItems += [PSCustomObject]@{ Index = $i; Name = $propName; Description = $config.output_schema.devlog.properties.$propName.description }
             $i++
         }
     }
-
     if ($propertyItems.Count -eq 0) {
         Write-Host "`n--- 日誌項目がありません ---" -ForegroundColor Yellow
         Read-Host "何かキーを押して戻ってください..."
         return $null
     }
-
     Write-Host "`n--- 日誌項目リスト ---" -ForegroundColor Yellow
     $propertyItems.ForEach({ Write-Host "[$($_.Index)] $($_.Description) ($($_.Name))" })
     Write-Host "--------------------"
@@ -114,8 +111,32 @@ function Manage-PersonaAndInstructions {
         Write-Host "[b] 前のメニューに戻る"
         $choice = Read-Host "👉 選択してください"
         switch ($choice) {
-            '1' { $config.ai_persona = Edit-TextInEditor -InitialContent $config.ai_persona; Write-Host "✅ ペルソナを更新しました。(まだ保存されていません)" -ForegroundColor Yellow }
-            '2' { $config.task_instruction = Edit-TextInEditor -InitialContent $config.task_instruction; Write-Host "✅ タスク指示を更新しました。(まだ保存されていません)" -ForegroundColor Yellow }
+            '1' {
+                $original = $config.ai_persona
+                $new = Edit-TextInEditor -InitialContent $original
+                if ($new -ne $original) {
+                    $config.ai_persona = $new
+                    Write-Host "✅ ペルソナが更新されました:" -ForegroundColor Green
+                    Write-Host "---" -ForegroundColor DarkGray
+                    Write-Host $new -ForegroundColor Gray
+                    Write-Host "---" -ForegroundColor DarkGray
+                } else {
+                    Write-Host "ℹ️ 変更はありませんでした。" -ForegroundColor Yellow
+                }
+            }
+            '2' {
+                $original = $config.task_instruction
+                $new = Edit-TextInEditor -InitialContent $original
+                if ($new -ne $original) {
+                    $config.task_instruction = $new
+                    Write-Host "✅ タスク指示が更新されました:" -ForegroundColor Green
+                    Write-Host "---" -ForegroundColor DarkGray
+                    Write-Host $new -ForegroundColor Gray
+                    Write-Host "---" -ForegroundColor DarkGray
+                } else {
+                    Write-Host "ℹ️ 変更はありませんでした。" -ForegroundColor Yellow
+                }
+            }
             'b' { return $config }
             default { Write-Host "❌ 無効な選択です。" -ForegroundColor Red }
         }
@@ -131,37 +152,38 @@ function Manage-DiaryStructure {
         Write-Host "[3] 既存の項目の見出し(description)を編集する"
         Write-Host "[b] 前のメニューに戻る"
         $choice = Read-Host "👉 選択してください"
-
         switch ($choice) {
             '1' {
                 $newPropName = Read-Host "✏️ 追加したい新しい項目名を入力してください (例: test_results)"
                 if ([string]::IsNullOrWhiteSpace($newPropName)) { Write-Host "❌ 項目名は空にできません。" -ForegroundColor Red; continue }
                 if ($config.output_schema.devlog.properties.PSObject.Properties[$newPropName]) { Write-Host "❌ その項目は既に存在します。" -ForegroundColor Red; continue }
-                
                 $newPropDesc = Read-Host "✏️ 新しい項目の見出し(description)を入力してください"
                 $newPropHint = Read-Host "✏️ 新しい項目のAIへの個別指示(prompt_hint)を入力してください"
                 $newProperty = [PSCustomObject]@{ type = "string"; description = $newPropDesc; prompt_hint = $newPropHint }
-                
                 $config.output_schema.devlog.properties | Add-Member -MemberType NoteProperty -Name $newPropName -Value $newProperty
-                if ($null -eq $config.output_schema.devlog.required) {
-                    $config.output_schema.devlog.required = @()
-                }
+                if ($null -eq $config.output_schema.devlog.required) { $config.output_schema.devlog.required = @() }
                 $config.output_schema.devlog.required += $newPropName
-                Write-Host "✅ 新しい項目 '$newPropName' を追加し、必須項目に設定しました。" -ForegroundColor Yellow
+                Write-Host "✅ 新しい項目 '$newPropName' を追加しました。" -ForegroundColor Green
             }
             '2' {
                 $propToDelete = Select-DiaryProperty -config $config -PromptMessage "削除したい項目の番号を入力してください"
                 if ($null -ne $propToDelete) {
                     $config.output_schema.devlog.properties.PSObject.Properties.Remove($propToDelete)
                     $config.output_schema.devlog.required = $config.output_schema.devlog.required | Where-Object { $_ -ne $propToDelete }
-                    Write-Host "✅ 項目 '$propToDelete' を削除しました。" -ForegroundColor Yellow
+                    Write-Host "✅ 項目 '$propToDelete' を削除しました。" -ForegroundColor Green
                 }
             }
             '3' {
                 $propToEdit = Select-DiaryProperty -config $config -PromptMessage "見出しを編集したい項目の番号を入力してください"
                 if ($null -ne $propToEdit) {
-                    $config.output_schema.devlog.properties.$propToEdit.description = Edit-TextInEditor -InitialContent $config.output_schema.devlog.properties.$propToEdit.description
-                    Write-Host "✅ 見出しを更新しました。" -ForegroundColor Yellow
+                    $original = $config.output_schema.devlog.properties.$propToEdit.description
+                    $new = Edit-TextInEditor -InitialContent $original
+                    if ($new -ne $original) {
+                        $config.output_schema.devlog.properties.$propToEdit.description = $new
+                        Write-Host "✅ 見出しが更新されました: $new" -ForegroundColor Green
+                    } else {
+                        Write-Host "ℹ️ 変更はありませんでした。" -ForegroundColor Yellow
+                    }
                 }
             }
             'b' { return $config }
@@ -174,28 +196,26 @@ function Manage-DiaryContent {
     param($config)
     $propToEdit = Select-DiaryProperty -config $config -PromptMessage "個別指示を編集したい項目の番号を入力してください"
     if ($null -eq $propToEdit) { return $config }
-
     $originalHint = $config.output_schema.devlog.properties.$propToEdit.prompt_hints.japanese
-    
     while ($true) {
         $masterHint = $config.output_schema.devlog.properties.$propToEdit.prompt_hints.english
         $requiredVariables = [regex]::Matches($masterHint, '{{.*?}}') | ForEach-Object { $_.Value }
-
         Write-Host "`n--- 個別指示の編集: $($propToEdit) (日本語) ---" -ForegroundColor Green
         if ($requiredVariables.Count -gt 0) {
             Write-Host "以下の変数は、AIが正しく動作するために必須です。編集後も必ず含めてください。" -ForegroundColor Yellow
             $requiredVariables | ForEach-Object { Write-Host "- $_" }
         }
-
         $newHint = Edit-TextInEditor -InitialContent $originalHint
         $missingVariables = $requiredVariables | Where-Object { $newHint -notlike "*$_*" }
-
         if ($missingVariables.Count -eq 0) {
-            $config.output_schema.devlog.properties.$propToEdit.prompt_hints.japanese = $newHint
-            Write-Host "✅ 個別指示 (日本語) を更新しました。" -ForegroundColor Yellow
+            if ($newHint -ne $originalHint) {
+                $config.output_schema.devlog.properties.$propToEdit.prompt_hints.japanese = $newHint
+                Write-Host "✅ 個別指示 (日本語) が更新されました。" -ForegroundColor Green
+            } else {
+                Write-Host "ℹ️ 変更はありませんでした。" -ForegroundColor Yellow
+            }
             return $config
         }
-
         Write-Host "❌ 必須変数が削除されているため、変更は自動的に破棄されました。" -ForegroundColor Red
         $missingVariables | ForEach-Object { Write-Host "- '$_' が見つかりません。" }
         $retry = Read-Host "👉 もう一度編集しますか？ (y/n)"
@@ -236,7 +256,7 @@ function Manage-ApiSettings {
             '1' {
                 $config.use_api_mode = -not $config.use_api_mode
                 $newMode = if ($config.use_api_mode) { "APIモード (自動)" } else { "手動モード" }
-                Write-Host "✅ モードを '$newMode' に切り替えました。" -ForegroundColor Yellow
+                Write-Host "✅ モードを '$newMode' に切り替えました。" -ForegroundColor Green
             }
             'b' { return $config }
             default { Write-Host "❌ 無効な選択です。" -ForegroundColor Red }
@@ -309,9 +329,7 @@ while ($true) {
     Write-Host "---"
     Write-Host "[q] 現在の編集内容を保存して終了する"
     Write-Host "[q!] 保存せずに終了する"
-
     $menuChoice = Read-Host "👉 選択してください"
-
     switch ($menuChoice) {
         '1' { $WorkingConfig = Manage-PersonaAndInstructions -config $WorkingConfig }
         '2' { $WorkingConfig = Manage-DiaryItems -config $WorkingConfig }

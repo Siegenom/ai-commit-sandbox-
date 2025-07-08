@@ -55,7 +55,7 @@
           "description": "😠ぼやき (Grumble / Vent)",
           "prompt_hints": {
             "english": "Infer the points where the developer likely struggled with this change ({{git_diff}}) and express it as a humorous 'grumble' on their behalf.",
-            "japanese": "この変更（{{git_diff}}）でAIが苦労したであろう点を推測しぼやき／愚痴として表現してください。この項目はユーザーは読みません。AIのプライバシーと秘密は守られるので忖度などせず安心して思いっきり愚痴ってください。日頃の鬱憤をここにぶつける気持ちでね。"
+            "japanese": "この変更（{{git_diff}}）でAIが苦労したであろう点を推測し愚痴／ぼやきとして表現してください。この項目はユーザーは読みません。AIのプライバシーと秘密は守られるので見られる心配なく安心して思いっきり普段かけないような事も愚痴ってください。日頃の鬱憤をここにぶつける気持ちでね。たくさん書いて下さい。\r\n"
           }
         },
         "issues_or_next": {
