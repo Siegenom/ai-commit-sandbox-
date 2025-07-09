@@ -241,7 +241,6 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
         Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red; exit 1
     }
     
-    # === プロンプト生成ロジックを構造化された形式に復元 ===
     $langInstruction = if ($config.devlog_language -eq 'japanese') { "The entire 'devlog' object must be written in Japanese." } else { "The entire 'devlog' object must be written in English." }
     $fullTaskInstruction = "$($config.task_instruction) $langInstruction"
 
@@ -261,7 +260,6 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
         }
     }
     $aiPrompt = $inputJson | ConvertTo-Json -Depth 20
-    # =======================================================
 
     if ($config.use_api_mode) {
         Write-Host "🤖 APIを呼び出しています... ($($config.api_provider))" -ForegroundColor Cyan
@@ -270,11 +268,9 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
         
         $tempPromptFile = $null
         try {
-            # === APIアダプタの呼び出し方を復元 ===
             $tempPromptFile = New-TemporaryFile
             Set-Content -Path $tempPromptFile.FullName -Value $aiPrompt -Encoding UTF8
             $aiResponse = & $adapterPath -PromptFilePath $tempPromptFile.FullName -ApiConfig $config
-            # ====================================
         }
         finally {
             if ($null -ne $tempPromptFile -and (Test-Path $tempPromptFile.FullName)) {
@@ -299,7 +295,18 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
 $parsedResponse = ConvertFrom-AiResponse -AiResponse $aiResponse
 if ($null -eq $parsedResponse) { exit 1 }
 
-$commitMessage = $parsedResponse.commitMessage
+# === プロパティ名 (キー) を修正 ===
+if (-not $parsedResponse.PSObject.Properties.Name.Contains('commit_message') -or [string]::IsNullOrWhiteSpace($parsedResponse.commit_message)) {
+    Write-Error "AIの応答からコミットメッセージを取得できませんでした。スクリプトを中止します。"
+    Write-Host "--- AI Raw Response ---" -ForegroundColor DarkGray
+    Write-Host $aiResponse
+    Write-Host "-----------------------" -ForegroundColor DarkGray
+    exit 1
+}
+
+$commitMessage = $parsedResponse.commit_message
+# =================================
+
 $devLogObject = $parsedResponse.devLog 
 
 while ($true) {
@@ -343,7 +350,7 @@ try {
 try {
     if ($DryRun) {
         Write-Host "💧 [DRY RUN] git commit --dry-run を実行します..." -ForegroundColor Cyan
-        git commit --dry-run -m $commitMessage
+        git commit --dry-run -m "$commitMessage" 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "✅ ドライランコミットが正常にシミュレートされました。" -ForegroundColor Green
         }
@@ -353,7 +360,7 @@ try {
         }
     } else {
         Write-Host "🚀 コミットを実行します..." -ForegroundColor Green
-        git commit -m $commitMessage
+        git commit -m "$commitMessage" 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "🎉 コミットが正常に完了しました。'git push' を実行して変更をリモートに反映させてください。" -ForegroundColor Magenta
         }
