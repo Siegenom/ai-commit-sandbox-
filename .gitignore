@@ -3,3 +3,5 @@ docs/devlog/
 /scripts/prompt-config.json
 scripts/presets/
 .history/
+/scripts/.ai_cache.json
+/scripts/.last_goal.txt

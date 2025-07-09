@@ -1,125 +1,104 @@
-﻿# --- SCRIPT PARAMETERS ---
+﻿#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Invokes the Google Gemini API with a structured prompt file.
+.PARAMETER PromptFilePath
+    Path to the temporary JSON file containing the structured prompt.
+.PARAMETER ApiConfig
+    A PSCustomObject containing API configuration like the API key.
+#>
+[CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)]
     [string]$PromptFilePath,
 
     [Parameter(Mandatory=$true)]
-    [PSCustomObject]$ApiConfig
+    [psobject]$ApiConfig
 )
 
 try {
-    # --- FILE READ ---
-    if (-not (Test-Path $PromptFilePath)) {
-        throw "Prompt file not found at path: $PromptFilePath"
+    $structuredPrompt = Get-Content -Path $PromptFilePath -Raw | ConvertFrom-Json
+} catch {
+    Write-Output "ERROR: Failed to read or parse the prompt file: $PromptFilePath. Error: $($_.Exception.Message)"
+    exit 1
+}
+
+# --- プロンプトの最終組み立て ---
+# 構造化されたオブジェクトから各パーツを抽出し、一つのテキストブロックに結合する
+$finalPromptText = @"
+# Persona
+$($structuredPrompt.system_prompt.persona)
+
+# Task
+$($structuredPrompt.system_prompt.task)
+
+# Output Schema Definition
+$($structuredPrompt.system_prompt.output_schema_definition | ConvertTo-Json -Depth 10 -Compress)
+
+# High Level Goal by User
+$($structuredPrompt.user_context.high_level_goal)
+
+# Git Diff to be analyzed
+```
+$($structuredPrompt.user_context.git_context.diff)
+```
+"@
+
+# --- APIリクエストの構築 ---
+$apiKey = $ApiConfig.api_key
+if ([string]::IsNullOrEmpty($apiKey)) {
+    $apiKey = $env:GEMINI_API_KEY
+}
+if ([string]::IsNullOrEmpty($apiKey)) {
+    Write-Output "ERROR: Gemini API key is not found. Please set it in prompt-config.json or as an environment variable 'GEMINI_API_KEY'."
+    exit 1
+}
+
+$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$apiKey"
+
+$headers = @{
+    "Content-Type" = "application/json"
+}
+
+$body = @{
+    contents = @(
+        @{
+            parts = @(
+                @{
+                    text = $finalPromptText
+                }
+            )
+        }
+    )
+} | ConvertTo-Json -Depth 10
+
+# --- API呼び出しとリトライ処理 ---
+$maxRetries = 2
+$retryDelaySeconds = 3
+$attempt = 0
+
+while ($attempt -lt $maxRetries) {
+    $attempt++
+    try {
+        $response = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $body -ContentType "application/json"
+        
+        $generatedText = $response.candidates[0].content.parts[0].text
+        Write-Output $generatedText
+        exit 0 # 成功したら終了
     }
-    $AiPrompt = Get-Content -Path $PromptFilePath -Raw -Encoding UTF8
-
-    # --- API KEY VALIDATION ---
-    $envVarName = $ApiConfig.api_key_env
-    $apiKey = (Get-Item -Path "env:\$envVarName" -ErrorAction SilentlyContinue).Value
-    if ([string]::IsNullOrEmpty($apiKey)) {
-        throw "API key not found in environment variable '$envVarName'."
-    }
-
-    # --- JSON PARSING ---
-    $promptObject = $AiPrompt | ConvertFrom-Json
-
-    # --- CONTEXT VALIDATION ---
-    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.high_level_goal)) {
-        throw "Validation Error: The 'high_level_goal' from the prompt file is empty."
-    }
-    if ([string]::IsNullOrWhiteSpace($promptObject.user_context.git_context.diff)) {
-        throw "Validation Error: The 'git_diff' from the prompt file is empty."
-    }
-
-    # --- REQUEST BODY CONSTRUCTION ---
-    
-    # Part 1: System Instruction (with token reduction)
-    
-    # Create a lightweight copy of the schema to avoid modifying the original object.
-    $lightweightSchema = $promptObject.system_prompt.output_schema_definition | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-
-    # Remove descriptive keys from the schema to reduce token count.
-    if ($null -ne $lightweightSchema.devlog.properties) {
-        foreach ($propKey in $lightweightSchema.devlog.properties.PSObject.Properties.Name) {
-            $null = $lightweightSchema.devlog.properties.$propKey.PSObject.Properties.Remove('description')
-            $null = $lightweightSchema.devlog.properties.$propKey.PSObject.Properties.Remove('prompt_hints')
+    catch {
+        $statusCode = $_.Exception.Response.StatusCode.Value__
+        $errorMessage = $_.Exception.Message
+        
+        if ($statusCode -in 500, 502, 503, 504) {
+            Write-Warning "Attempt $attempt failed with status $statusCode. Retrying in $retryDelaySeconds seconds..."
+            Start-Sleep -Seconds $retryDelaySeconds
+        } else {
+            Write-Output "ERROR: API call failed with status $statusCode. Message: $errorMessage"
+            exit 1
         }
     }
-    if ($null -ne $lightweightSchema.devlog) {
-        $null = $lightweightSchema.devlog.PSObject.Properties.Remove('description')
-    }
-    if ($null -ne $lightweightSchema.commit_message) {
-        $null = $lightweightSchema.commit_message.PSObject.Properties.Remove('description')
-    }
-    
-    $schemaJson = $lightweightSchema | ConvertTo-Json -Depth 20 -Compress
-    
-    $systemInstructionTemplate = @'
-{0}
-
-{1}
-
-```json
-{2}
-```
-'@
-    $systemInstructionText = $systemInstructionTemplate -f $promptObject.system_prompt.persona, $promptObject.system_prompt.task, $schemaJson
-
-    $systemInstructionPayload = @{
-        parts = @(
-            @{ text = $systemInstructionText }
-        )
-    }
-
-    # Part 2: User Context
-    $stagedFilesText = $promptObject.user_context.git_context.staged_files -join [System.Environment]::NewLine
-    $userContextTemplate = @'
-# User's Goal
-{0}
-
-# Staged Files
-{1}
-
-# Git Diff
-```diff
-{2}
-```
-'@
-    $userContextText = $userContextTemplate -f $promptObject.user_context.high_level_goal, $stagedFilesText, $promptObject.user_context.git_context.diff
-
-    $userContentPayload = @{
-        parts = @(
-            @{ text = $userContextText }
-        )
-    }
-
-    # Part 3: Final Assembly
-    $finalPayload = @{
-        systemInstruction = $systemInstructionPayload
-        contents = @( $userContentPayload )
-    }
-    
-    $requestBody = $finalPayload | ConvertTo-Json -Depth 20
-    
-    # --- API CALL ---
-    $apiUrlTemplate = '{0}?key={1}'
-    $apiUrl = $apiUrlTemplate -f $ApiConfig.api_endpoints.gemini.url, $apiKey
-    $headers = @{ 'Content-Type' = 'application/json; charset=utf-8' }
-
-    $responseJson = Invoke-RestMethod -Uri $apiUrl -Method Post -Headers $headers -Body $requestBody -ErrorAction Stop
-
-    # --- RESPONSE PROCESSING ---
-    $candidate = $responseJson.candidates | Select-Object -First 1
-    $part = $candidate.content.parts | Select-Object -First 1
-    $generatedText = $part.text.Trim()
-    if ($null -ne $generatedText) {
-        $cleanedText = $generatedText -replace '(?s)^```(json)?\s*|\s*```$'
-        return $cleanedText
-    } else {
-        throw "API response did not contain the expected text content."
-    }
-} catch {
-    $errorMessage = "FATAL ERROR in invoke-gemini-api.ps1: $($_.Exception.Message)"
-    return "ERROR: $errorMessage"
 }
+
+Write-Output "ERROR: API call failed after $maxRetries attempts."
+exit 1

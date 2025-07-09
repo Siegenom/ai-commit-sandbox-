@@ -1,4 +1,5 @@
-﻿<#
+﻿#Requires -Version 5.1
+<#
 .SYNOPSIS
     AI-assisted Git commit and devlog generation script with history and caching.
 .PARAMETER Debug
@@ -37,28 +38,87 @@ $LastGoalFile = Join-Path -Path $PSScriptRoot -ChildPath ".last_goal.txt"
 $CacheFile = Join-Path -Path $PSScriptRoot -ChildPath ".ai_cache.json"
 
 # --- Functions ---
-function Edit-TextInEditor { param([string]$InitialContent) } # Placeholder for brevity
-function Get-HostWithHistory { param([string]$Prompt, [string]$HistoryFile) } # Placeholder for brevity
-function Get-CacheKey { param([string]$GitDiff, [string]$HighLevelGoal) } # Placeholder for brevity
+function Edit-TextInEditor {
+    param([string]$InitialContent)
+    Write-Host "✏️ デフォルトのエディタで値を編集し、保存後、エディタを閉じてください。" -ForegroundColor Cyan
+    $editorCommand = $env:EDITOR
+    if ([string]::IsNullOrEmpty($editorCommand)) { $editorCommand = $env:VISUAL }
+    if ([string]::IsNullOrEmpty($editorCommand)) {
+        if ($env:OS -eq 'Windows_NT') { $editorCommand = "notepad.exe" }
+        elseif ($PSVersionTable.Platform -eq 'MacOS' -or $PSVersionTable.Platform -eq 'Unix') {
+            if (Get-Command open -ErrorAction SilentlyContinue) { $editorCommand = "open -W -t" }
+            else {
+                $editors = @("code --wait", "nano", "vim", "vi")
+                $editorCommand = ($editors | ForEach-Object { if (Get-Command $_.Split(' ')[0] -ErrorAction SilentlyContinue) { $_; break } })
+            }
+        }
+    }
+    if ([string]::IsNullOrEmpty($editorCommand)) { Write-Error "編集に使用できるエディタが見つかりません。"; return $InitialContent }
+    $tempFile = New-TemporaryFile
+    try {
+        Set-Content -Path $tempFile.FullName -Value $InitialContent -Encoding UTF8
+        $editorParts = $editorCommand.Split(' ', 2); $editorExe = $editorParts[0]
+        $editorArgs = if ($editorParts.Length -gt 1) { @($editorParts[1], $tempFile.FullName) } else { $tempFile.FullName }
+        Start-Process -FilePath $editorExe -ArgumentList $editorArgs -Wait
+        return Get-Content -Path $tempFile.FullName -Raw -Encoding UTF8
+    } catch {
+        Write-Error "エディタの起動またはファイルの読み込みに失敗しました: $_"; return $InitialContent
+    } finally {
+        if (Test-Path $tempFile.FullName) { Remove-Item $tempFile.FullName -Force }
+    }
+}
+
+function Get-HostWithHistory {
+    param(
+        [string]$Prompt,
+        [string]$HistoryFile
+    )
+    $history = ""
+    if (Test-Path $HistoryFile) {
+        $history = Get-Content $HistoryFile -Raw -ErrorAction SilentlyContinue
+    }
+    if ((-not [string]::IsNullOrEmpty($history)) -and (Get-Module -ListAvailable -Name PSReadLine)) {
+        try {
+            [Microsoft.PowerShell.PSConsoleReadLine]::SetBufferState($history, $history.Length)
+        }
+        catch {}
+    }
+    $userInput = Read-Host -Prompt $Prompt
+    if (-not [string]::IsNullOrWhiteSpace($userInput)) {
+        Set-Content -Path $HistoryFile -Value $userInput -Encoding UTF8
+    }
+    return $userInput
+}
+
+function Get-CacheKey {
+    param(
+        [string]$GitDiff,
+        [string]$HighLevelGoal
+    )
+    if ([string]::IsNullOrEmpty($GitDiff) -or [string]::IsNullOrEmpty($HighLevelGoal)) {
+        return $null
+    }
+    $combinedString = "${GitDiff}:${HighLevelGoal}"
+    $sha256 = New-Object -TypeName System.Security.Cryptography.SHA256Managed
+    $utf8 = New-Object -TypeName System.Text.UTF8Encoding
+    $hashBytes = $sha256.ComputeHash($utf8.GetBytes($combinedString))
+    return [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+}
 
 function Format-GitDiffForDisplay {
     Write-Host "---" -ForegroundColor DarkGray
     Write-Host "今回のコミット対象となる変更点のサマリーです：" -ForegroundColor Yellow
     
-    # Get file stats (additions/deletions) using numstat
     $numstatOutput = git diff --staged --numstat
     if (-not [string]::IsNullOrWhiteSpace($numstatOutput)) {
         $numstatOutput.Split([System.Environment]::NewLine) | ForEach-Object {
             if ([string]::IsNullOrWhiteSpace($_)) { return }
             $parts = $_ -split "`t"
             if ($parts.Length -eq 3) {
-                $additions = $parts[0]
-                $deletions = $parts[1]
-                $filePath = $parts[2]
                 Write-Host (" " * 2) -NoNewline
-                Write-Host "+$additions " -ForegroundColor Green -NoNewline
-                Write-Host "-$deletions " -ForegroundColor Red -NoNewline
-                Write-Host $filePath -ForegroundColor White
+                Write-Host "+$($parts[0]) " -ForegroundColor Green -NoNewline
+                Write-Host "-$($parts[1]) " -ForegroundColor Red -NoNewline
+                Write-Host $parts[2] -ForegroundColor White
             }
         }
     }
@@ -66,16 +126,57 @@ function Format-GitDiffForDisplay {
     Write-Host "---" -ForegroundColor DarkGray
 }
 
+function ConvertFrom-AiResponse {
+    param([string]$AiResponse)
+    if ([string]::IsNullOrWhiteSpace($AiResponse)) {
+        Write-Error "AIからの応答が空です。"
+        return $null
+    }
+    try {
+        $jsonContent = $AiResponse -replace '(?ms)^```json\s*|\s*```$'
+        return $jsonContent | ConvertFrom-Json
+    } catch {
+        Write-Error "AI応答のJSONパースに失敗しました: $($_.Exception.Message)"
+        Write-Host "--- AI Raw Response ---" -ForegroundColor DarkGray
+        Write-Host $AiResponse
+        Write-Host "-----------------------" -ForegroundColor DarkGray
+        return $null
+    }
+}
+
+function ConvertTo-DevlogMarkdown {
+    param($DevlogObject)
+    
+    $markdown = @"
+## ✅ やったこと (Accomplishments)
+- $($DevlogObject.accomplishments -join "`n- ")
+
+## 📚 学びと発見 (Learnings & Discoveries)
+- $($DevlogObject.learnings_and_discoveries -join "`n- ")
+
+## 😌 今の気分 (Current Mood) 
+- $($DevlogObject.current_mood)
+
+## 😠 ぼやき (Grumble / Vent)
+- $($DevlogObject.grumble_or_vent)
+
+## 🚀 次にやること (Issues or Next)
+- $($DevlogObject.issues_or_next -join "`n- ")
+"@
+    return $markdown
+}
+
+
 # --- Main Logic ---
 Write-Host "🤖 AIによるコミットと日誌生成を開始します..." -ForegroundColor Cyan
 
 if ($Debug -and $DryRun) {
-    Write-Host "⚠️ DEBUG DRY RUN MODE: Using sample data to test the full script flow." -ForegroundColor Yellow
+    Write-Host "⚠️ デバッグ・ドライランモード: サンプルデータで全工程をテストします。" -ForegroundColor Yellow
     Write-Host "💧 日誌ファイルは一時フォルダに出力され、実際のコミットは行われません。" -ForegroundColor Cyan
 } elseif ($Debug) {
-    Write-Host "⚠️ DEBUG MODE: Using sample data. No files will be written, no commits will be made." -ForegroundColor Yellow
+    Write-Host "⚠️ デバッグモード: サンプルデータを使用します。ファイル書き込みやコミットは行いません。" -ForegroundColor Yellow
 } elseif ($DryRun) {
-     Write-Host "💧 DRY RUN MODE: 日誌ファイルは一時フォルダに出力されます: $LogDir" -ForegroundColor Cyan
+     Write-Host "💧 ドライランモード: 日誌ファイルは一時フォルダに出力されます: $LogDir" -ForegroundColor Cyan
 }
 
 if ($EnableAutoStaging -and -not $Debug) {
@@ -99,7 +200,7 @@ $currentBranch = "debug-branch"
 $stagedFiles = @("sample/file1.txt", "sample/file2.js")
 
 if ($Debug) {
-    $gitDiff = "..." # Sample diff data
+    $gitDiff = "diff --git a/sample.txt b/sample.txt`n--- a/sample.txt`n+++ b/sample.txt`n@@ -1 +1 @@`n-hello`n+hello world"
 } else {
     $gitDiff = (git diff --staged | Out-String).Trim()
     if ([string]::IsNullOrEmpty($gitDiff)) {
@@ -116,20 +217,17 @@ $promptMessage = "🎯 上記の変更点を踏まえ、このコミットの主
 $highLevelGoal = Get-HostWithHistory -Prompt $promptMessage -HistoryFile $LastGoalFile
 
 $cacheKey = Get-CacheKey -GitDiff $gitDiff -HighLevelGoal $highLevelGoal
-# Initialize as a Hashtable to allow adding keys
-$cache = @{}
+$cache = [hashtable]@{}
 if (Test-Path $CacheFile) {
     try { 
-        # Convert the PSCustomObject from JSON into a Hashtable for proper key handling
         $cache = Get-Content $CacheFile -Raw | ConvertFrom-Json -AsHashtable
     } catch { 
-        $cache = @{} 
+        $cache = [hashtable]@{}
     }
 }
 
 $aiResponse = ""
-# Use .ContainsKey() method for Hashtables
-if ($cache.ContainsKey($cacheKey)) {
+if (-not [string]::IsNullOrEmpty($cacheKey) -and $cache.ContainsKey($cacheKey)) {
     Write-Host "✅ キャッシュされたAIの応答が見つかりました。API呼び出しをスキップします。" -ForegroundColor Green
     $aiResponse = $cache[$cacheKey]
 } 
@@ -143,32 +241,123 @@ if ([string]::IsNullOrWhiteSpace($aiResponse)) {
         Write-Host "❌ 設定ファイル '$ConfigFile' の読み込みまたはパースに失敗しました。" -ForegroundColor Red; exit 1
     }
     
+    # === プロンプト生成ロジックを構造化された形式に復元 ===
     $langInstruction = if ($config.devlog_language -eq 'japanese') { "The entire 'devlog' object must be written in Japanese." } else { "The entire 'devlog' object must be written in English." }
     $fullTaskInstruction = "$($config.task_instruction) $langInstruction"
 
     $inputJson = [PSCustomObject]@{
-        system_prompt = @{ persona = $config.ai_persona; task = $fullTaskInstruction; output_schema_definition = $config.output_schema }
-        user_context  = @{ high_level_goal = $highLevelGoal; git_context = @{ current_branch = $currentBranch; staged_files = $stagedFiles; diff = $gitDiff } }
+        system_prompt = @{ 
+            persona = $config.ai_persona; 
+            task = $fullTaskInstruction; 
+            output_schema_definition = $config.output_schema 
+        }
+        user_context  = @{ 
+            high_level_goal = $highLevelGoal; 
+            git_context = @{ 
+                current_branch = $currentBranch; 
+                staged_files = $stagedFiles; 
+                diff = $gitDiff 
+            } 
+        }
     }
     $aiPrompt = $inputJson | ConvertTo-Json -Depth 20
+    # =======================================================
 
     if ($config.use_api_mode) {
         Write-Host "🤖 APIを呼び出しています... ($($config.api_provider))" -ForegroundColor Cyan
         $adapterPath = Join-Path -Path $PSScriptRoot -ChildPath "api_adapters\invoke-$($config.api_provider)-api.ps1"
         if (-not (Test-Path $adapterPath)) { Write-Host "❌ APIアダプターのファイルが見つかりません！" -ForegroundColor Red; exit 1 }
         
-        # Call the adapter with the correct parameter name
-        $aiResponse = & $adapterPath -AiPrompt $aiPrompt -ApiConfig $config
+        $tempPromptFile = $null
+        try {
+            # === APIアダプタの呼び出し方を復元 ===
+            $tempPromptFile = New-TemporaryFile
+            Set-Content -Path $tempPromptFile.FullName -Value $aiPrompt -Encoding UTF8
+            $aiResponse = & $adapterPath -PromptFilePath $tempPromptFile.FullName -ApiConfig $config
+            # ====================================
+        }
+        finally {
+            if ($null -ne $tempPromptFile -and (Test-Path $tempPromptFile.FullName)) {
+                Remove-Item -Path $tempPromptFile.FullName -Force
+            }
+        }
         
         if ($aiResponse -like "ERROR:*") { Write-Host "❌ API処理中にエラーが発生しました: $aiResponse" -ForegroundColor Red; exit 1 }
         Write-Host "✅ APIから応答を取得しました。" -ForegroundColor Green
 
-        # Add new response to the cache hashtable
-        $cache[$cacheKey] = $aiResponse
-        $cache | ConvertTo-Json -Depth 10 | Set-Content -Path $CacheFile -Encoding UTF8
+        if (-not [string]::IsNullOrEmpty($cacheKey)) {
+            $cache[$cacheKey] = $aiResponse
+            $cache | ConvertTo-Json -Depth 10 | Set-Content -Path $CacheFile -Encoding UTF8
+        }
     } else {
-        # ... (Manual mode logic)
+        Write-Warning "APIモードが無効です。手動モードは現在実装されていません。"
+        exit 1
     }
 }
 
-# ... (Rest of the script: parsing, user confirmation, final actions)
+# --- 応答の解析とユーザー確認 ---
+$parsedResponse = ConvertFrom-AiResponse -AiResponse $aiResponse
+if ($null -eq $parsedResponse) { exit 1 }
+
+$commitMessage = $parsedResponse.commitMessage
+$devLogObject = $parsedResponse.devLog 
+
+while ($true) {
+    $devLogContent = ConvertTo-DevlogMarkdown -DevlogObject $devLogObject
+
+    Write-Host "`n--- 生成されたコミットメッセージ ---" -ForegroundColor Green
+    Write-Host $commitMessage
+    Write-Host "------------------------------------`n" -ForegroundColor Green
+
+    Write-Host "--- 生成された日誌 ---" -ForegroundColor Cyan
+    Write-Host $devLogContent
+    Write-Host "------------------------`n" -ForegroundColor Cyan
+
+    $choice = Read-Host "👉 この内容でよろしいですか？ (y:コミット実行 / e:編集 / n:中止)"
+    if ($choice -match '^[Yy]') {
+        break
+    } elseif ($choice -match '^[Ee]') {
+        $commitMessage = Edit-TextInEditor -InitialContent $commitMessage
+        Write-Warning "日誌の編集は現在サポートされていません。コミットメッセージのみ編集されました。"
+    } else {
+        Write-Host "❌ 操作を中止しました。" -ForegroundColor Red
+        exit 0
+    }
+}
+
+# --- 最終処理 ---
+if ($Debug -and -not $DryRun) {
+    Write-Host "✅ [DEBUG MODE] 処理が正常に完了しました。ファイル書き込みとコミットはスキップされました。" -ForegroundColor Green
+    exit 0
+}
+
+try {
+    $finalLogContent = ConvertTo-DevlogMarkdown -DevlogObject $devLogObject
+    Set-Content -Path $LogFile -Value $finalLogContent -Encoding UTF8
+    Write-Host "✅ 日誌を保存しました: $LogFile" -ForegroundColor Green
+} catch {
+    Write-Error "日誌ファイルの書き込みに失敗しました: $_"
+    exit 1
+}
+
+try {
+    if ($DryRun) {
+        Write-Host "💧 [DRY RUN] git commit --dry-run を実行します..." -ForegroundColor Cyan
+        git commit --dry-run -m $commitMessage
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ ドライランコミットが正常にシミュレートされました。" -ForegroundColor Green
+        }
+        if (Test-Path $LogFile) {
+            Write-Host "🗑️ 一時的な日誌ファイルを削除します: $LogFile"
+            Remove-Item $LogFile -Force
+        }
+    } else {
+        Write-Host "🚀 コミットを実行します..." -ForegroundColor Green
+        git commit -m $commitMessage
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "🎉 コミットが正常に完了しました。'git push' を実行して変更をリモートに反映させてください。" -ForegroundColor Magenta
+        }
+    }
+} catch {
+    Write-Error "git commit の実行に失敗しました: $_"
+}
