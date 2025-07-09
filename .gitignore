@@ -1,2 +1,5 @@
 docs/ignore/
+docs/devlog/
 /scripts/prompt-config.json
+scripts/presets/
+.history/

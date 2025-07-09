@@ -1,91 +1,126 @@
+## プロジェクト構成と処理フロー
+
+このドキュメントは、AIコミット＆日誌生成ツールの全ファイルの役割と、それらがどのように連携して動作するかを解説します。
+
+### ■ 主要ファイルとフォルダの役割
+
+| ファイル/フォルダ | 役割 |
+| :--- | :--- |
+| **`scripts/commit-ai.ps1`** | **メインスクリプト。** ユーザーが実行する中心的なファイル。Git情報の収集、AI応答のキャッシュ確認、API呼び出しの指示、最終的なコミットまで、全体の処理フローを制御します。 |
+| **`scripts/manage-prompt.ps1`** | **設定管理スクリプト。** 対話形式で`prompt-config.json`の内容を安全に編集します。お気に入りの設定を「プリセット」として保存・読込する機能も持ちます。 |
+| **`scripts/api_adapters/`** | **API連携スクリプト群。** `invoke-gemini-api.ps1`などがここに配置されます。メインスクリプトから渡されたプロンプトを、各AIサービス（Geminiなど）が要求する形式に整形し、実際にAPI通信を行う責務を担います。 |
+| `scripts/prompt-config.json` | **ユーザー設定ファイル。** AIのペルソナやタスク指示など、ユーザーが自由にカスタマイズする設定が保存されます。このファイルは`.gitignore`で管理対象外とすべきです。 |
+| `scripts/prompt-config.default.json` | **初期設定ファイル。** `prompt-config.json`が存在しない場合にコピーされたり、設定を初期状態に戻したりする際のテンプレートとなります。 |
+| **`scripts/presets/`** | **プリセット保存フォルダ。** `manage-prompt.ps1`で保存した、ユーザー独自の設定プリセット（`.json`形式）が格納されます。このフォルダも`.gitignore`で管理対象外とするのが適切です。 |
+| `scripts/.last_goal.txt` | **履歴ファイル。** `commit-ai.ps1`で前回入力された「主な目標」を一時的に保存します。 |
+| `scripts/.ai_cache.json` | **キャッシュファイル。** 一度APIから取得したAIの応答を保存します。「同じ差分」と「同じ目標」の組み合わせの場合は、APIを呼び出さず、このキャッシュを再利用してトークン消費を節約します。 |
+| **`docs/devlog/`** | **開発日誌出力先。** AIが生成した日誌がMarkdownファイルとして保存されます。プロジェクトの成果物であり、ツール自体のソースコードとは分けるため、`.gitignore`で管理対象外とすることが推奨されます。 |
+
+### ■ 全体処理フロー図 (更新版)
 
 ```mermaid
 graph TD
-    %% --- スタイル定義 ---
-    classDef userAction fill:#fff2cc,stroke:#d6b656,stroke-width:2px;
-    classDef scriptAction fill:#e6f0ff,stroke:#5691d6,stroke-width:1px;
-    classDef fileIO fill:#e6ffe6,stroke:#56d656,stroke-width:1px;
-    classDef decision fill:#ffebf0,stroke:#d65691,stroke-width:1px;
-    classDef aiInteraction fill:#f0e6ff,stroke:#9156d6,stroke-width:2px;
-
-    %% --- フロー開始 ---
-    Start((ユーザーが commit-ai.ps1 を実行)) --> CheckUnstaged;
-
-    %% --- フェーズ1: 準備段階 ---
-    subgraph Phase_1_準備と動的コンテキスト収集
-        CheckUnstaged["/git diff --quiet/\n未ステージの変更を確認"]:::scriptAction;
-        CheckUnstaged -- "変更あり" --> AskStage{"すべての変更を\nステージングしますか？"}:::decision;
-        AskStage -- "Yes" --> GitAddAll["git add ."]:::scriptAction;
-        AskStage -- "No" --> CheckStaged;
-        CheckUnstaged -- "変更なし" --> CheckStaged;
-        GitAddAll --> CheckStaged;
-
-        CheckStaged["/git diff --staged/\nステージング済みの変更を確認"]:::scriptAction;
-        CheckStaged -- "変更なし" --> End_NoChanges([処理中断: 変更なし]):::decision;
-        CheckStaged -- "変更あり" --> GatherContext;
-
-        GatherContext["git diff, git branch 等を実行し\n動的データを収集"]:::scriptAction;
-        GatherContext --> AskHighLevelGoal;
-
-        AskHighLevelGoal["Read-Host\nユーザーに高レベルの目標を質問\n(例: JSON化計画の推進)"]:::userAction;
+    subgraph "Phase 1: ユーザー実行 & モード判定"
+        A(ユーザーが commit-ai.ps1 を実行) --> B{実行時パラメータは？};
+        B -- "-Debug" --> C[デバッグモード];
+        B -- "-DryRun" --> D[ドライランモード];
+        B -- "パラメータなし" --> E[通常モード];
+        C --> F[サンプル差分データを使用];
+        D --> G[日誌は一時フォルダへ<br>コミットは--dry-run];
+        E --> H[Gitから実際の差分を取得];
     end
-    AskHighLevelGoal --> AssemblePrompt;
 
-    %% --- フェーズ2: プロンプト構築 (役割分担の核心) ---
-    subgraph Phase_2_JSONプロンプト構築
-        AssemblePrompt["1. 静的設定を読み込む"]:::scriptAction;
-        AssemblePrompt --> ReadConfigFile;
-        ReadConfigFile[("prompt-config.json\nAIの役割、指示、出力形式など")]:::fileIO;
-
-        ReadConfigFile --> CreatePSObject;
-        CreatePSObject["2. PowerShellオブジェクトを生成"]:::scriptAction;
-        CreatePSObject --> PopulateObject;
-        PopulateObject["3. 動的データと静的設定を\nオブジェクトに格納"]:::scriptAction;
-        PopulateObject --> ConvertToJson;
-        ConvertToJson["4. ConvertTo-Json を実行し\n入力用JSONプロンプトを生成"]:::scriptAction;
+    subgraph "Phase 2: コンテキスト収集とキャッシュ確認"
+        F --> I{目標入力 & キャッシュキー生成};
+        H --> I;
+        I --> J["scripts/.last_goal.txt<br>(目標履歴)"];
+        I --> K{キャッシュは存在するか？};
+        K -- "Yes" --> L["scripts/.ai_cache.json<br>から応答を読み込む"];
+        K -- "No" --> M[API呼び出し準備];
     end
-    ConvertToJson --> ToClipboard;
 
-    %% --- フェーズ3: AIとの対話 ---
-    subgraph Phase_3_AIとの対話_手動
-        ToClipboard["入力用JSONをクリップボードにコピー"]:::scriptAction;
-        ToClipboard --> UserPastePrompt["ユーザーがAIに入力用JSONを貼り付け、\nAIからの出力(JSON)をコピーする"]:::userAction;
-        UserPastePrompt --> FromClipboard;
-        FromClipboard["クリップボードから出力用JSONを取得"]:::scriptAction;
+    subgraph "Phase 3: API連携 (キャッシュがない場合)"
+        M --> N["scripts/prompt-config.json<br>からAI設定を読み込む"];
+        M --> O[プロンプトJSONを構築];
+        O --> P[invoke-gemini-api.ps1 を呼び出す];
+        P -- "リトライ処理(50x系)" --> Q((🌐 Gemini API));
+        Q --> P;
+        P --> R[応答をキャッシュに保存<br>scripts/.ai_cache.json];
+        R --> S[AI応答を取得];
     end
-    FromClipboard --> ParseResponse;
 
-    %% --- フェーズ4: 応答の解釈と検証 ---
-    subgraph Phase_4_応答の解釈とユーザー確認
-        ParseResponse["ConvertFrom-Json を実行し\n応答JSONをPowerShellオブジェクトに変換"]:::scriptAction;
-        ParseResponse --> DisplayToUser;
-        DisplayToUser["コミットメッセージと日誌内容を\nユーザーに表示"]:::scriptAction;
-        DisplayToUser --> AskConfirm{"この内容でコミットしますか？\n(Y/n/e)"}:::decision;
+    subgraph "Phase 4: 応答の表示と最終処理"
+        L --> T{AI応答をパース};
+        S --> T;
+        T --> U[コミットメッセージと日誌内容を表示];
+        U --> V{"ユーザー確認<br>(コミット/編集/中止)"};
+        V -- "コミット実行" --> W{モードに応じた処理};
+        W -- "DryRunモード" --> X[--dry-runでコミット実行<br>一時ファイルを削除];
+        W -- "通常モード" --> Y[通常のコミットとプッシュ];
+        W -- "Debugモード(単体)" --> Z([安全に終了]);
     end
-    AskConfirm -- "e (編集)" --> EditFlow;
-    AskConfirm -- "n (中止)" --> End_UserCancel([処理中断: ユーザー操作]):::decision;
-    AskConfirm -- "Y (承認)" --> SaveLog;
 
-    %% --- 編集フロー ---
-    subgraph Edit_Flow_編集フロー
-        EditFlow["1. コミットメッセージを編集"]:::userAction;
-        EditFlow --> OpenNotepad["2. 日誌内容を一時ファイル\n(UTF-8 BOM)に書き出し\nメモ帳で開く"]:::scriptAction;
-        OpenNotepad --> UserEditFile["3. ユーザーがメモ帳で編集・保存"]:::userAction;
-        UserEditFile --> ReadTempFile["4. 編集後の内容を読み込む"]:::scriptAction;
-    end
-    ReadTempFile --> SaveLog;
+    classDef userAction fill:#fff2cc,stroke:#333,stroke-width:2px,color:#333;
+    classDef scriptAction fill:#e6f0ff,stroke:#333,stroke-width:1px,color:#333;
+    classDef fileIO fill:#e6ffe6,stroke:#333,stroke-width:1px,color:#333;
+    classDef decision fill:#ffebf0,stroke:#333,stroke-width:1px,color:#333;
+    classDef api fill:#f0e6ff,stroke:#333,stroke-width:2px,color:#333;
 
-    %% --- フェーズ5: 最終処理 ---
-    subgraph Phase_5_Git操作と完了
-        SaveLog["日誌内容をタイムスタンプ付き\nMarkdownファイルとして保存"]:::scriptAction;
-        SaveLog --> AddLogFile[("docs/devlog/*.md")]:::fileIO;
-        AddLogFile --> GitAddLog["git add で日誌ファイルを追加"]:::scriptAction;
-        GitAddLog --> GitCommit["git commit を実行"]:::scriptAction;
-        GitCommit --> AskPush{"リモートにプッシュしますか？"}:::decision;
-        AskPush -- "Yes" --> GitPush["git push を実行"]:::scriptAction;
-        AskPush -- "No" --> End_Success;
-        GitPush --> End_Success;
-    end
-    End_Success([✅ 完了])
+    class A,V userAction;
+    class B,K,W,T decision;
+    class C,D,E,F,G,H,I,M,O,P,S,U,X,Y,Z scriptAction;
+    class J,L,N,R fileIO;
+    class Q api;
 ```
 
+```mermaid
+graph LR
+    subgraph "実行スクリプト"
+        S1["commit-ai.ps1<br>(メイン処理)"];
+        S2["manage-prompt.ps1<br>(設定管理)"];
+        S3["api_adapters/invoke-gemini-api.ps1<br>(API連携)"];
+    end
+
+    subgraph "設定・データファイル"
+        F1["prompt-config.json<br>(ユーザー設定)"];
+        F2["prompt-config.default.json<br>(初期設定)"];
+        F3["presets/*.json<br>(設定プリセット群)"];
+        F4[".ai_cache.json<br>(AI応答キャッシュ)"];
+        F5[".last_goal.txt<br>(目標入力履歴)"];
+    end
+    
+    subgraph "生成物"
+        O1["docs/devlog/*.md<br>(開発日誌)"];
+    end
+
+    subgraph "外部サービス"
+        E1(("🌐 Gemini API"));
+    end
+
+    %% manage-prompt.ps1 の関連
+    S2 -- "読込/書込" --> F1;
+    S2 -- "読込" --> F2;
+    S2 -- "読込/書込" --> F3;
+
+    %% commit-ai.ps1 の関連
+    S1 -- "読込" --> F1;
+    S1 -- "読込/書込" --> F4;
+    S1 -- "読込/書込" --> F5;
+    S1 -- "実行" --> S3;
+    S1 -- "書込" --> O1;
+
+    %% invoke-gemini-api.ps1 の関連
+    S3 -- "データ" --> E1;
+
+    classDef userAction fill:#fff2cc,stroke:#333,stroke-width:2px,color:#333;
+    classDef scriptAction fill:#e6f0ff,stroke:#333,stroke-width:1px,color:#333;
+    classDef fileIO fill:#e6ffe6,stroke:#333,stroke-width:1px,color:#333;
+    classDef decision fill:#ffebf0,stroke:#333,stroke-width:1px,color:#333;
+    classDef api fill:#f0e6ff,stroke:#333,stroke-width:2px,color:#333;
+
+    class A,V userAction;
+    class B,K,W,T decision;
+    class C,D,E,F,G,H,I,M,O,P,S,U,X,Y,Z scriptAction;
+    class J,L,N,R fileIO;
+    class Q api;
+```
