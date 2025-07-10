@@ -16,7 +16,7 @@
 | `scripts/.ai_cache.json` | **キャッシュファイル。** 一度APIから取得したAIの応答を保存します。「同じ差分」と「同じ目標」の組み合わせの場合は、APIを呼び出さず、このキャッシュを再利用してトークン消費を節約します。 |
 | **`docs/devlog/`** | **開発日誌出力先。** AIが生成した日誌がMarkdownファイルとして保存されます。プロジェクトの成果物であり、ツール自体のソースコードとは分けるため、`.gitignore`で管理対象外とすることが推奨されます。 |
 
-### ■ 全体処理フロー図 (更新版)
+### ■ 全体処理フロー図
 
 ```mermaid
 graph TD
@@ -43,7 +43,7 @@ graph TD
         M --> N["scripts/prompt-config.json<br>からAI設定を読み込む"];
         M --> O[プロンプトJSONを構築];
         O --> P[invoke-gemini-api.ps1 を呼び出す];
-        P -- "リトライ処理(50x系)" --> Q((🌐 Gemini API));
+        P -- "リトライ処理(50x系)" --> Q((🤖 Gemini API));
         Q --> P;
         P --> R[応答をキャッシュに保存<br>scripts/.ai_cache.json];
         R --> S[AI応答を取得];
@@ -73,43 +73,58 @@ graph TD
     class Q api;
 ```
 
+---
+### ■ 全体処理フロー図
+
 ```mermaid
 graph LR
-    subgraph "実行スクリプト"
-        S1["commit-ai.ps1<br>(メイン処理)"];
-        S2["manage-prompt.ps1<br>(設定管理)"];
-        S3["api_adapters/invoke-gemini-api.ps1<br>(API連携)"];
+    subgraph "生成物"
+        direction TB
+        O1["O1: docs/devlog/*.md<br>(開発日誌)"];
     end
 
     subgraph "設定・データファイル"
-        F1["prompt-config.json<br>(ユーザー設定)"];
-        F2["prompt-config.default.json<br>(初期設定)"];
-        F3["presets/*.json<br>(設定プリセット群)"];
-        F4[".ai_cache.json<br>(AI応答キャッシュ)"];
-        F5[".last_goal.txt<br>(目標入力履歴)"];
+        direction TB
+        F1["F1: prompt-config.json<br>(ユーザー設定)"];
+        F2["F2: prompt-config.default.json<br>(初期設定)"];
+        F3["F3: presets/*.json<br>(設定プリセット群)"];
+        F4["F4: ai_cache.json<br>(AI応答キャッシュ)"];
+        F5["F5: last_goal.txt<br>(目標入力履歴)"];
     end
     
-    subgraph "生成物"
-        O1["docs/devlog/*.md<br>(開発日誌)"];
+    subgraph "実行スクリプト"
+        direction TB
+        S1["S1: commit-ai.ps1<br>(メイン処理)"];
+        S2["S2: manage-prompt.ps1<br>(設定管理)"];
+        S3["S3: invoke-gemini-api.ps1<br>(API Adapter)"];
     end
 
     subgraph "外部サービス"
-        E1(("🌐 Gemini API"));
+        direction TB
+        E1(("E1: 🤖 Gemini API"));
     end
 
-    %% manage-prompt.ps1 の関連
-    S2 -- "読込/書込" --> F1;
-    S2 -- "読込" --> F2;
-    S2 -- "読込/書込" --> F3;
+    F1 ~~~ O1;
+    S3 ~~~ F1
 
-    %% commit-ai.ps1 の関連
-    S1 -- "読込" --> F1;
-    S1 -- "読込/書込" --> F4;
-    S1 -- "読込/書込" --> F5;
+%% linkStyle 2 stroke:#0000FF,stroke-width:2px 
+%% linkStyle 3 stroke:#000FF,stroke-width:2px
+%% linkStyle 4 stroke:#F000FF,stroke-width:2px
+
+    S1 --> F1; 
+    S1<--> F4;
+    S1<--> F5;
     S1 -- "実行" --> S3;
-    S1 -- "書込" --> O1;
+    S1 --> O1;
 
-    %% invoke-gemini-api.ps1 の関連
+
+    S2 <--> F3; 
+    S2 <--> F1; 
+    S2 --> F2; 
+
+%%    S2 -- "(読込/書込)" --> F1; 
+
+
     S3 -- "データ" --> E1;
 
     classDef userAction fill:#fff2cc,stroke:#333,stroke-width:2px,color:#333;
@@ -123,4 +138,11 @@ graph LR
     class C,D,E,F,G,H,I,M,O,P,S,U,X,Y,Z scriptAction;
     class J,L,N,R fileIO;
     class Q api;
+```
+```mermaid
+flowchart LR
+a1[a-1] --> a2[a-2] --> a3[a-3] --> a4[a-4]
+b1(b-1) --> b2(b-2) --> b3(b-3) --> b4(b-4)
+
+a1 --> b2
 ```
